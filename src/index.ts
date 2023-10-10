@@ -1,46 +1,39 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { filter } from 'rxjs/operators';
 
-function logMute() {
-  conn.muteGroup(1).state$.subscribe((state) => {
-    console.log('Mute 1 is:', state);
-  });
-}
-
 const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
 //console.log(conn);
 //conn.disconnect(); // close connection
 //conn.reconnect(); // close connection and reconnect after timeout
 
-setTimeout(() => {
-    conn.muteGroup(1).toggle()
-    logMute()
-}, 2000);
+console.log('Started');
 
-setTimeout(() => {
-    conn.muteGroup(1).toggle()
-    logMute()
-}, 4000);
+function muteToggle(x:number) {
+  conn.muteGroup(x).toggle()  
+  conn.muteGroup(x).state$.subscribe((state) => {
+  });
+}
 
-setTimeout(() => {
-    conn.muteGroup(1).toggle()
-    logMute()
-}, 6000);
+var Gpio = require('onoff').Gpio; //include onoff to interact with the GPIO
+var LED = new Gpio(9, 'out'); //use GPIO pin 9 as output
+var pushButton = new Gpio(5, 'in', 'rising', {debounceTimeout: 75}); //use GPIO pin 17 as input, and 'both' button presses, and releases should be handled
+var occurrence = 0;
+pushButton.watch(function (err:string, value:string) { //Watch for hardware interrupts on pushButton GPIO, specify callback function
+  if (err) { //if an error
+    console.error('There was an error', err); //output error message to console
+  return;
+  }
+  occurrence ++;
+  console.log('BUTTON Action',occurrence);
+  muteToggle(1)
+  LED.writeSync(value); //turn LED on or off depending on the button state (0 or 1)
+});
 
-setTimeout(() => {
-    logMute()
-    conn.muteGroup(1).toggle()
-}, 8000);
+function unexportOnClose() { //function to run when exiting program
+  LED.writeSync(0); // Turn LED off
+  LED.unexport(); // Unexport LED GPIO to free resources
+  pushButton.unexport(); // Unexport Button GPIO to free resources
+};
 
-//conn.master.faderLevel$.subscribe(value => {
-//  console.log('happed', value);
-  // ...
-//});
-
-//conn.status$.subscribe((status) => {
-//  console.log('Connection status', status.type);
-//  if (status.type == ConnectionStatus.Error) soundcraft.reconnect();
-//});
-
-
+process.on('SIGINT', unexportOnClose); //function to run when user closes using ctrl+c
