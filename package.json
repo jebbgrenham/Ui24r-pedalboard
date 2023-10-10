@@ -1,0 +1,19 @@
+{
+  "name": "ui24r-pedalboard",
+  "version": "1.0.0",
+  "description": "Allow a Raspberry Pi (or any SBC) to control a Soundcraft Ui24r using foot switches on GPIO",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jebbgrenham/Ui24r-pedalboard.git"
+  },
+  "author": "Jebb Grenham",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/jebbgrenham/Ui24r-pedalboard/issues"
+  },
+  "homepage": "https://github.com/jebbgrenham/Ui24r-pedalboard#readme"
+}
