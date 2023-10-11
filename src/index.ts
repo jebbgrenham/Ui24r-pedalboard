@@ -11,57 +11,47 @@ function muteToggle(x:number) {
   conn.muteGroup(x).toggle()
 }
 
-var Gpio = require('onoff').Gpio; //include onoff to interact with the GPIO
-var LED1 = new Gpio(9, 'out') //use GPIO pins as output
-var LED2 = new Gpio(10, 'out')
-var LED3 = new Gpio(11, 'out')
-var LED4 = new Gpio(12, 'out')
-var pushButton1 = new Gpio(5, 'in', 'rising', {debounceTimeout: 75}) //use GPIO pins as input
-var pushButton2 = new Gpio(6, 'in', 'rising', {debounceTimeout: 75})
-var pushButton3 = new Gpio(7, 'in', 'rising', {debounceTimeout: 75})
-var pushButton4 = new Gpio(8, 'in', 'rising', {debounceTimeout: 75})
+function handleButtonEvent(buttonNumber: number) {// Handle button events
+  return function (err: string, value: string) {
+    if (err) {
+      console.error('There was an error', err);
+      return;
+    }
+    muteToggle(buttonNumber);
+  };
+}
 
-conn.muteGroup(1).state$.subscribe((state) => { //keep LED in correct state
-  console.log('Should LED to:', state)
-  LED1.writeSync(state)
-  console.log(LED1.readSync())
-});
-
-pushButton1.watch(function (err:string, value:string) { //Watch for hardware interrupts
-  if (err) { //if an error
-    console.error('There was an error', err); //output error message to console
-  return;
-  }
-  muteToggle(1)
-//  LED1.writeSync(value)
-//  conn.muteGroup(1).state$.subscribe((state) => {
-//  console.log('Mute 1 is:', state);
-//  });
-});
-pushButton2.watch(function (err:string, value:string) { //Watch for hardware interrupts
-  if (err) { //if an error
-    console.error('There was an error', err); //output error message to console
-  return;
-  }
-  muteToggle(2)
-});
-pushButton3.watch(function (err:string, value:string) { //Watch for hardware interrupts
-  if (err) { //if an error
-    console.error('There was an error', err); //output error message to console
-  return;
-  }
-  muteToggle(3)
-});
-pushButton4.watch(function (err:string, value:string) { //Watch for hardware interrupts
-  if (err) { //if an error
-    console.error('There was an error', err); //output error message to console
-  return;
-  }
-  muteToggle(4)
-});
+function subscribeAndControlLED( //make the LEDs read mutegroup states
+  muteGroupNumber: number,
+  LED: { writeSync: (state: number) => void, readSync: () => number }
+): void {
+  conn.muteGroup(muteGroupNumber).state$.subscribe((state) => {
+    LED.writeSync(state)
+//    console.log(`LED${muteGroupNumber} set to:`, LED.readSync())
+  });
+}
 
 
+var Gpio = require('onoff').Gpio; //set up all the variables for the GPIO pins
+const ledPinNumbers = [9, 10, 11, 12];
+const pushButtonPins = [5, 6, 7, 8];
+const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
+const pushButtons = pushButtonPins.map(
+  (pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: 75 })
+);
+const [LED1, LED2, LED3, LED4] = LED;
+const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
 
+// Watch buttons using the handleButtonEvent function
+pushButton1.watch(handleButtonEvent(1));
+pushButton2.watch(handleButtonEvent(2));
+pushButton3.watch(handleButtonEvent(3));
+pushButton4.watch(handleButtonEvent(4));
+// update the LEDs constantly
+subscribeAndControlLED(1, LED1);
+subscribeAndControlLED(2, LED2);
+subscribeAndControlLED(3, LED3);
+subscribeAndControlLED(4, LED4);
 
 function unexportOnClose() { //function to run when exiting program
   LED1.writeSync(0); // Turn LED off
