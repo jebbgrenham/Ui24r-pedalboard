@@ -1,24 +1,35 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection'
 import { filter } from 'rxjs/operators'
-const conn = new SoundcraftUI("10.0.1.2")
+var player = require('play-sound')() 
+const conn = new SoundcraftUI("192.168.43.160")
 conn.connect()
-console.log('Started')
-var mode = "mutesA"
-
+console.log('Started Program')
+console.log('YOU CHANGED IP YOU FOOL')
+let mode = "mutesA"
+console.log('Started in mode: ', mode)
 function stopButtonListeners() {
   buttons.forEach((button) => button.unwatchAll());
 }
 
-function handleButtonEvent(buttonNumber: number) {
+function handleMuteEvent(buttonNumber: number) {
   return (err: string, value: string) => {
-    if (!err) conn.muteGroup(buttonNumber).toggle()
-    console.log('buttonhandle', buttonNumber)
+    if (!err) {
+      if (buttonNumber === 7) { conn.muteGroup('fx').toggle()} 
+      else if (buttonNumber === 8) { conn.muteGroup('all').toggle()} 
+      else { conn.muteGroup(buttonNumber).toggle() }
+    console.log('Pushed Button:', buttonNumber)
+    }
   }
 }
 
 function handleSamplerEvent(buttonNumber: number) {
   return (err: string, value: string) => {
-    if (!err) console.log('sample play') //conn.muteGroup(buttonNumber).toggle()
+    if (!err) { 
+      player.play('./samples/' + buttonNumber + '.wav', (err: string) => {
+      if (err) console.log(`Could not play sound: ${err}`);
+      console.log('Played sample', buttonNumber)
+      });
+    }
   }
 }
 
@@ -42,6 +53,9 @@ const [LED1, LED2, LED3, LED4] = LED;
 const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
 const buttons = [pushButton1, pushButton2, pushButton3, pushButton4];
 const leds = [LED1, LED2, LED3, LED4];
+buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+leds.forEach((led, index) => subscribeAndControlLED(index + 1, led));
+
 
 modeButton.watch((err: any, value: any) => {
   if (err) {
@@ -49,16 +63,16 @@ modeButton.watch((err: any, value: any) => {
   }
   if (value === 1) {
   stopButtonListeners()
-  if (mode === "mutesA"){ mode = "mutesB" } else if (mode === "mutesB"){ mode = "sampler" } else if (mode === "sampler"){mode = "mutesA" }
-  console.log(mode, '\n')
+  if (mode === "mutesA"){ mode = "mutesB" } else if (mode === "mutesB"){ mode = "sampler" } else if (mode === "sampler"){mode = "player" } else if (mode === "player"){ mode = "mutesA"}
+  console.log('Mode is now ', mode)
   if (mode === "mutesA") {
-  buttons.forEach((button, index) => button.watch(handleButtonEvent(index + 1)));
+  buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
   leds.forEach((led, index) => subscribeAndControlLED(index + 1, led));
 } else if (mode === "mutesB") {
-  buttons.forEach((button, index) => button.watch(handleButtonEvent(index + 5)));
+  buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 5)));
 } else if (mode === "sampler") {
   buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-}
+} else if (mode === "player"){}
 
 }
 });

@@ -4,12 +4,12 @@ const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const conn = new soundcraft_ui_connection_1.SoundcraftUI("10.0.1.2");
 conn.connect();
 console.log('Started');
-var mode = "mutesA";
+let mode = "mutesA";
 function stopButtonListeners() {
     buttons.forEach((button) => button.unwatchAll());
 }
 function handleButtonEvent(buttonNumber) {
-    return (err, value) => {
+    return (err) => {
         if (!err)
             conn.muteGroup(buttonNumber).toggle();
         console.log('buttonhandle', buttonNumber);
