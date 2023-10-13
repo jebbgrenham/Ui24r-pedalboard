@@ -8,7 +8,7 @@ console.log('YOU CHANGED IP YOU FOOL')
 let mode = "mutesA"
 console.log('Started in mode: ', mode)
 
-function subscribeLEDs(LEDindex: number,LED: { writeSync: (state: number) => void, readSync: () => number } ) {
+function subscribeLED(LEDindex: number,LED: { writeSync: (state: number) => void, readSync: () => number } ) {
   let index: number | string = LEDindex;
   //if mode is mutes A.... but will this subscribe when mode changes? NO IT WON'T? Need console.
   if (mode === 'mutesA'){ console.log('MODE UPDATED') }
@@ -77,7 +77,7 @@ const buttons = [pushButton1, pushButton2, pushButton3, pushButton4];
 const leds = [LED1, LED2, LED3, LED4];
 buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
 //leds.forEach((led, index) => subscribeAndControlLED(index + 1, led));
-leds.forEach((led, index) => subscribeLEDs(index + 1, led))
+leds.forEach((led, index) => subscribeLED(index + 1, led))
 
 modeButton.watch((err: any, value: any) => {
   if (err) {
