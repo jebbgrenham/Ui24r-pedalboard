@@ -1,2 +1,24 @@
 # Ui24r-pedalboard
-Allow a Raspberry Pi (or any SBC) to control a Soundcraft Ui24r using foot switches on GPIO 
+Allow a Raspberry Pi (or any SBC) to control some critical functions on a Soundcraft Ui24r using foot switches on GPIO 
+
+4 switches x 4 pages
+
+Pg1:
+-Mute All
+-Mute FX
+-Mute Group 1
+-Mute Group 2
+
+Pg2:
+-Mute Group 3
+-Mute Group 4
+-Mute Group 5
+-Mute Group 6
+
+Pg3
+-Fade up and play player
+-Fade down and pause player
+-Next track (player)
+-Multi track record toggle
+
+...or whatever you modfity the code to do. Thanks to Ferdinand Malcher (fmalcher) you can use their library to do nearly anything on the console.
