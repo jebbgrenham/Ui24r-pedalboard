@@ -24,4 +24,4 @@ Page 3
 Page 4
 - Play audio samples (use pedal as sampler as well)
 
-...or whatever you modfity the code to do. Thanks to Ferdinand Malcher (:- [@fmalcher]) you can use their library to do nearly anything on the console.
+...or whatever you modfity the code to do. Thanks to [Ferdinand Malcher @fmalcher](https://github.com/fmalcher/fmalcher) you can use their library to do nearly anything on the console.
