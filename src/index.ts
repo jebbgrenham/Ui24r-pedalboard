@@ -3,11 +3,11 @@ import { interval } from 'rxjs';
 const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
 
-// Initialize the Soundcraft UI connection
+// Initialize
 const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
 
-// Define your modes and initial mode
+// Define modes 
 const modes = ["mutesA", "mutesB", "sampler", "player"];
 let modeIndex = 0;
 
@@ -32,7 +32,6 @@ const ledIndexMap: { [mode: string]: (number | string)[] } = {
 // Create a map to track subscriptions
 const subscriptionMap: { [index: number | string]: any } = {};
 
-// Function to subscribe LEDs
 function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
   let index: number | string = LEDindex;
   if (subscriptionMap[index]) {
@@ -44,7 +43,6 @@ function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: numbe
   });
 }
 
-// Function to unsubscribe LEDs
 function unsubscribeLEDs() {
   for (const index in subscriptionMap) {
     if (subscriptionMap.hasOwnProperty(index)) {
@@ -109,12 +107,10 @@ function handlePlayerEvent(buttonNumber: number) {
   }
 };
 
-// Function to stop button listeners
 function stopButtonListeners() {
   buttons.forEach((button) => button.unwatchAll());
 }
 
-// Set mode to "mutesA" when the program starts
 let mode: string = "mutesA"; //you will regret changing this...
 console.log(mode)
 const initialIndexes = ledIndexMap[mode];
@@ -132,10 +128,10 @@ modeButton.watch((err: any, value: any) => {
   if (value === 1) {
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
-    mode = modes[modeIndex]; // Update the mode variable
+    mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
-// Handle button events based on the mode
+// Handle button events per mode
   if (mode === "sampler") {
     buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
   } else if (mode === "player") {
@@ -146,9 +142,9 @@ modeButton.watch((err: any, value: any) => {
 }
 });
 
-// Function to update LED subscriptions based on the current mode
+// Update LED subscriptions based on the mode
 function updateSubscriptions() {
-  unsubscribeLEDs(); // Unsubscribe from previous subscriptions
+  unsubscribeLEDs();
   const indexes = ledIndexMap[mode];
   if (indexes) {
     for (let i = 0; i < leds.length; i++) {
@@ -169,5 +165,5 @@ function unexportOnClose() {
   });
 }
 
-process.on('SIGINT', unexportOnClose); // Function to run when the user closes using Ctrl+C
+process.on('SIGINT', unexportOnClose); // ctrl+c handling
 
