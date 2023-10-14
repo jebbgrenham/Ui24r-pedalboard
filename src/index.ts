@@ -94,15 +94,20 @@ function handlePlayerEvent(buttonNumber: number) {
   return (err: string, value: string) => {
     if (!err) {
       if (buttonNumber == 1 ){
-      conn.player.loadPlaylist('music')
-      conn.player.setShuffle(1)	
-      conn.player.play() } 
-      else if (buttonNumber ==2 ) { conn.player.pause()	}
-      else if (buttonNumber ==3 ) { conn.player.next() }
-      else if (buttonNumber ==4 ) { 
-        console.log('recording toggled')
-        conn.recorderMultiTrack.recordToggle()
+//      conn.player.loadPlaylist('Music')
+//      conn.player.setShuffle(1)	
+//      conn.player.next()
+      conn.player.play()  
+      conn.master.player(1).fadeToDB(-25, 3000) 
       }
+      else if (buttonNumber == 2 ) { 
+        conn.master.player(1).fadeTo(0, 3000)
+        setTimeout(() => {
+          conn.player.pause();
+          }, 3000); 
+        }
+      else if (buttonNumber == 3 ) { conn.player.next() }
+      else if (buttonNumber == 4 ) { conn.recorderMultiTrack.recordToggle() }
     };
   }
 };
