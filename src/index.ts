@@ -70,33 +70,44 @@ function handleMuteEvent(buttonNumber: number) {
   };
 }
 
-
-// Function to handle sampler events
 function handleSamplerEvent(buttonNumber: number) {
-  return (err: string, value: string) => {
+  let audio: any = null;
+
+  return (err: string | null, value: string | null) => {
     if (!err) {
-      var audio = player.play('./samples/' + buttonNumber + '.wav', (err: string) => {
-        if (err) console.log(`Could not play sound: ${err}`);
-        pushButton1.watch(audio.kill());  
-        console.log('Played sample', buttonNumber);
-      });
+      if (audio) {
+        audio.kill(); // Stop audio playback if the same button is pressed again
+        audio = null;
+      } else {
+        audio = player.play('./samples/' + buttonNumber + '.wav', (err: string | null) => {
+          if (err) {
+            console.log(`Could not play sound: ${err}`);
+          } else {
+            console.log('Played sample', buttonNumber);
+            audio = null;
+          }
+        });
+      }
     }
   };
 }
-
 
 function handlePlayerEvent(buttonNumber: number) {
   return (err: string, value: string) => {
     if (!err) {
-/*      player.play('./samples/' + buttonNumber + '.wav', (err: string) => {
-        if (err) console.log(`Could not play sound: ${err}`);
-        console.log('Played sample', buttonNumber);
-      });
-*/      
-    }
-  };
-
-}
+      if (buttonNumber == 1 ){
+      conn.player.loadPlaylist('music')
+      conn.player.setShuffle(1)	
+      conn.player.play() } 
+      else if (buttonNumber ==2 ) { conn.player.pause()	}
+      else if (buttonNumber ==3 ) { conn.player.next() }
+      else if (buttonNumber ==4 ) { 
+        console.log('recording toggled')
+        conn.recorderMultiTrack.recordToggle()
+      }
+    };
+  }
+};
 
 // Function to stop button listeners
 function stopButtonListeners() {
@@ -104,7 +115,7 @@ function stopButtonListeners() {
 }
 
 // Set mode to "mutesA" when the program starts
-let mode: string = "mutesA";
+let mode: string = "mutesA"; //you will regret changing this...
 console.log(mode)
 const initialIndexes = ledIndexMap[mode];
 updateSubscriptions();
