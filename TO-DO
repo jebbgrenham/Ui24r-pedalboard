@@ -1,0 +1,6 @@
+Unload all those resources properly. 
+Write mode LED code (4 LEDS)
+Try to find the memory leak
+
+Check LED pins for 3.3v
+Test with footswitches
