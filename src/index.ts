@@ -8,7 +8,7 @@ const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
 
 // Define modes 
-const modes = ["mutesA", "mutesB", "sampler", "player"];
+const modes = ["mutesA", "mutesB", "player", "sampler"];
 let modeIndex = 0;
 
 // Define LED and button pins
@@ -25,8 +25,8 @@ const leds = [LED1, LED2, LED3, LED4];
 
 // Define the LED index mapping
 const ledIndexMap: { [mode: string]: (number | string)[] } = {
-  mutesA: [1, 2, 3, 4],
-  mutesB: [5, 6, 'fx', 'all'],
+  mutesA: ['all', 'fx', 1, 2],
+  mutesB: [3, 4, 5, 6],
 };
 
 // Create a map to track subscriptions
