@@ -38,16 +38,12 @@ const ledIndexMap: { [mode: string]: (number | string)[] } = {
 const subscriptionMap: { [index: number | string]: any } = {};
 
 function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
-  console.log('subLED called')
   let index: number | string = LEDindex;
   if (subscriptionMap[index]) {
     subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
   }
-
   if (mode === "player") {
-  console.log('ok player')
-    if (index === 1 || index === 2) {
-      // Led1 and Led2 are based on PlayerState
+    if (index === 1) {
       subscriptionMap[index] = conn.player.state$.subscribe((state: PlayerState) => {
         if (state === PlayerState.Playing) {
           LED.writeSync(1);
@@ -56,16 +52,16 @@ function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: numbe
         }
       });
     } else if (index === 4) {
-      // Led4 is based on MtkState
-      subscriptionMap[index] = conn.recorderMultiTrack.state$.subscribe((state: MtkState) => {
-        if (state === MtkState.Playing) {
+      // Led4 is based on recorder state
+      subscriptionMap[index] = conn.recorderMultiTrack.recording$.subscribe((recording: number) => {
+        if (recording == 1) {
           LED.writeSync(1);
         } else {
           LED.writeSync(0);
         }
       });
     }
-  } else if (mode === "mutesA" || mode === "mutesB" || mode === "sampler") {
+  } else if (mode === "mutesA" || mode === "mutesB") {
     subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
       LED.writeSync(state);
       console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
@@ -75,23 +71,6 @@ function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: numbe
   }
 }
 
-
-
-
-/*
-function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
-  let index: number | string = LEDindex;
-  if (subscriptionMap[index]) {
-    subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
-  }
-  if (mode == "mutesA" || "mutesB" ) {
-    subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
-      LED.writeSync(state);
-      console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
-    });
-  } else { unsubscribeLEDs() }
-}
-*/
 function unsubscribeLEDs() {
   for (const led of leds) {
     led.writeSync(0); // Turn off the LED
@@ -177,8 +156,10 @@ function handlePlayerEvent(buttonNumber: number) {
             }
           });
       } else if (buttonNumber == 2) {
-        conn.player.next();
+        conn.player.prev();
       } else if (buttonNumber == 3) {
+        conn.player.next();
+      } else if (buttonNumber == 4) {
         conn.recorderMultiTrack.recordToggle();
       }
     }
@@ -220,7 +201,6 @@ modeButton.watch((err: any, value: any) => {
 }
 });
 
-// Update LED subscriptions based on the mode
 function updateSubscriptions() {
   unsubscribeLEDs();
   const indexes = ledIndexMap[mode];
@@ -228,6 +208,12 @@ function updateSubscriptions() {
     for (let i = 0; i < leds.length; i++) {
       subscribeLED(indexes[i], leds[i]);
     }
+  }
+
+  // Check for "player" mode and explicitly call subscribeLED for LEDs 1 and 4
+  if (mode === "player") {
+    subscribeLED(1, LED1);
+    subscribeLED(4, LED4);
   }
 }
 
