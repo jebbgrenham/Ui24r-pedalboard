@@ -1,8 +1,13 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
-import { interval } from 'rxjs';
+import { PlayerState, MtkState } from 'soundcraft-ui-connection';
+import { interval, Subscription } from 'rxjs';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+
 const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
-
+const readline = require('readline');
+ 
 // Initialize
 const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
@@ -33,17 +38,65 @@ const ledIndexMap: { [mode: string]: (number | string)[] } = {
 const subscriptionMap: { [index: number | string]: any } = {};
 
 function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
+  console.log('subLED called')
   let index: number | string = LEDindex;
   if (subscriptionMap[index]) {
     subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
   }
-  subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
-    LED.writeSync(state);
-    console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
-  });
+
+  if (mode === "player") {
+  console.log('ok player')
+    if (index === 1 || index === 2) {
+      // Led1 and Led2 are based on PlayerState
+      subscriptionMap[index] = conn.player.state$.subscribe((state: PlayerState) => {
+        if (state === PlayerState.Playing) {
+          LED.writeSync(1);
+        } else {
+          LED.writeSync(0);
+        }
+      });
+    } else if (index === 4) {
+      // Led4 is based on MtkState
+      subscriptionMap[index] = conn.recorderMultiTrack.state$.subscribe((state: MtkState) => {
+        if (state === MtkState.Playing) {
+          LED.writeSync(1);
+        } else {
+          LED.writeSync(0);
+        }
+      });
+    }
+  } else if (mode === "mutesA" || mode === "mutesB" || mode === "sampler") {
+    subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
+      LED.writeSync(state);
+      console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
+    });
+  } else {
+    // Retain the original behavior for other modes
+  }
 }
 
+
+
+
+/*
+function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
+  let index: number | string = LEDindex;
+  if (subscriptionMap[index]) {
+    subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
+  }
+  if (mode == "mutesA" || "mutesB" ) {
+    subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
+      LED.writeSync(state);
+      console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
+    });
+  } else { unsubscribeLEDs() }
+}
+*/
 function unsubscribeLEDs() {
+  for (const led of leds) {
+    led.writeSync(0); // Turn off the LED
+  }
+
   for (const index in subscriptionMap) {
     if (subscriptionMap.hasOwnProperty(index)) {
       subscriptionMap[index].unsubscribe();
@@ -70,47 +123,67 @@ function handleMuteEvent(buttonNumber: number) {
 
 function handleSamplerEvent(buttonNumber: number) {
   let audio: any = null;
-
   return (err: string | null, value: string | null) => {
+
     if (!err) {
+      // Turn on the LED
+      leds[buttonNumber - 1].writeSync(1);
       if (audio) {
-        audio.kill(); // Stop audio playback if the same button is pressed again
+        audio.kill(); // Stop audio playback if button is pressed again
+        leds[buttonNumber - 1].writeSync(0);
         audio = null;
       } else {
+        console.log('trying to play')
         audio = player.play('./samples/' + buttonNumber + '.wav', (err: string | null) => {
           if (err) {
-            console.log(`Could not play sound: ${err}`);
+            console.log(`Could not play sound/sound stopped: ${err}`);
           } else {
             console.log('Played sample', buttonNumber);
             audio = null;
           }
+          leds[buttonNumber - 1].writeSync(0);
         });
       }
     }
   };
 }
+//import { Subscription } from 'rxjs';
 
 function handlePlayerEvent(buttonNumber: number) {
   return (err: string, value: string) => {
     if (!err) {
-      if (buttonNumber == 1 ){
-//      conn.player.loadPlaylist('Music')
-//      conn.player.setShuffle(1)	
-//      conn.player.next()
-      conn.player.play()  
-      conn.master.player(1).fadeToDB(-25, 3000) 
+      if (buttonNumber == 1) {
+        // Create a new destroy$ subject for each button press
+        let destroy$ = new Subject<void>();
+
+        // Subscribe to player state with takeUntil
+        conn.player.state$
+          .pipe(takeUntil(destroy$))
+          .subscribe((state: PlayerState) => {
+            if (state == PlayerState.Playing) {
+              console.log('stopping');
+              destroy$.next(); // Signal unsubscription
+              destroy$.complete();
+              conn.master.player(1).fadeTo(0, 3000);
+              setTimeout(() => {
+                conn.player.pause();
+              }, 3000);
+            } else {
+              console.log('playing');
+              conn.player.play();
+              conn.master.player(1).fadeToDB(-25, 3000);
+              destroy$.next(); // Signal unsubscription
+              destroy$.complete();
+            }
+          });
+      } else if (buttonNumber == 2) {
+        conn.player.next();
+      } else if (buttonNumber == 3) {
+        conn.recorderMultiTrack.recordToggle();
       }
-      else if (buttonNumber == 2 ) { 
-        conn.master.player(1).fadeTo(0, 3000)
-        setTimeout(() => {
-          conn.player.pause();
-          }, 3000); 
-        }
-      else if (buttonNumber == 3 ) { conn.player.next() }
-      else if (buttonNumber == 4 ) { conn.recorderMultiTrack.recordToggle() }
-    };
-  }
-};
+    }
+  };
+}
 
 function stopButtonListeners() {
   buttons.forEach((button) => button.unwatchAll());
@@ -157,6 +230,31 @@ function updateSubscriptions() {
     }
   }
 }
+
+// listen to keypress
+readline.emitKeypressEvents(process.stdin);
+if (process.stdin.isTTY) process.stdin.setRawMode(true);
+
+process.stdin.on("keypress", (str, key) => {
+    if(key.name == "m") { 
+    console.log("M")
+    stopButtonListeners();
+    modeIndex = (modeIndex + 1) % modes.length;
+    mode = modes[modeIndex];
+    console.log('Mode now', mode);
+    updateSubscriptions();
+// Handle button events per mode
+  if (mode === "sampler") {
+    buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+  } else if (mode === "player") {
+    buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+  } else {
+    buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+  }
+
+  }
+})
+// END LISTEN KEYPRESS
 
 // Handle program termination and unexport GPIO pins
 function unexportOnClose() {
