@@ -1,6 +1,7 @@
 Unload all those resources properly. 
 Write mode LED code (4 LEDS)
 Try to find the memory leak
+Use mon.sh to check the GPIO pins with console present on network
 
 Check LED pins for 3.3v
 Test with footswitches
