@@ -113,7 +113,7 @@ function handleSamplerEvent(buttonNumber: number) {
         audio = null;
       } else {
         console.log('trying to play')
-        audio = player.play('./samples/' + buttonNumber + '.wav', (err: string | null) => {
+        audio = player.play('/home/admin/samples/' + buttonNumber + '.wav', (err: string | null) => {
           if (err) {
             console.log(`Could not play sound/sound stopped: ${err}`);
           } else {
