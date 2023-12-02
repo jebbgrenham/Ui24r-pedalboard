@@ -10,7 +10,7 @@ const readline = require('readline');
 // Initialize
 const conn = new soundcraft_ui_connection_1.SoundcraftUI("10.0.1.2");
 conn.connect();
-// Define modes 
+// Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
 let modeIndex = 0;
 // Define LED and button pins
@@ -122,7 +122,6 @@ function handleSamplerEvent(buttonNumber) {
         }
     };
 }
-//import { Subscription } from 'rxjs';
 function handlePlayerEvent(buttonNumber) {
     return (err, value) => {
         if (!err) {
@@ -173,26 +172,56 @@ updateSubscriptions();
 // Watch buttons
 buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
 // Initialize mode button and set up mode change logic
-const modeButton = new Gpio(4, 'in', 'rising', { debounceTimeout: 75 });
+const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: 75 });
+let isModeButtonPressed = false;
+let shutdownTimeout = null;
+// Function to handle mode change
+function handleModeChange() {
+    stopButtonListeners();
+    modeIndex = (modeIndex + 1) % modes.length;
+    mode = modes[modeIndex];
+    console.log('Mode now', mode);
+    updateSubscriptions();
+    // Handle button events per mode
+    if (mode === "sampler") {
+        buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+    }
+    else if (mode === "player") {
+        buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+    }
+    else {
+        buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+    }
+}
+// Function to handle shutdown
+function handleShutdown() {
+    console.log('Shutting down...');
+    executeShutdownCommand();
+}
 modeButton.watch((err, value) => {
     if (err) {
         throw err;
     }
-    if (value === 1) {
-        stopButtonListeners();
-        modeIndex = (modeIndex + 1) % modes.length;
-        mode = modes[modeIndex];
-        console.log('Mode now', mode);
-        updateSubscriptions();
-        // Handle button events per mode
-        if (mode === "sampler") {
-            buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+    if (value === 0) {
+        // Button pressed
+        isModeButtonPressed = true;
+        shutdownTimeout = setTimeout(() => {
+            if (isModeButtonPressed) {
+                handleShutdown();
+            }
+            shutdownTimeout = null;
+        }, 3000);
+    }
+    else if (value === 1) {
+        // Button released
+        if (isModeButtonPressed) {
+            handleModeChange();
         }
-        else if (mode === "player") {
-            buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-        }
-        else {
-            buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+        isModeButtonPressed = false;
+        // Clear the shutdown timeout if it exists
+        if (shutdownTimeout) {
+            clearTimeout(shutdownTimeout);
+            shutdownTimeout = null;
         }
     }
 });
@@ -234,7 +263,6 @@ process.stdin.on("keypress", (str, key) => {
         }
     }
 });
-// END LISTEN KEYPRESS
 // Handle program termination and unexport GPIO pins
 function unexportOnClose() {
     leds.forEach((led) => {
@@ -243,6 +271,17 @@ function unexportOnClose() {
     });
     pushButtons.forEach((button) => {
         button.unexport();
+    });
+}
+function executeShutdownCommand() {
+    const exec = require('child_process').exec;
+    exec('sudo shutdown -h now', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error during shutdown: ${error}`);
+        }
+        else {
+            console.log('Shutdown initiated successfully.');
+        }
     });
 }
 process.on('SIGINT', unexportOnClose); // ctrl+c handling
