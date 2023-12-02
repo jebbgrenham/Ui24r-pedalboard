@@ -7,17 +7,23 @@ const operators_1 = require("rxjs/operators");
 const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
 const readline = require('readline');
+// Constants
+const LED_OFF = 0;
+const LED_ON = 1;
+const DEBOUNCE_TIMEOUT = 75;
+const ledPinNumbers = [9, 10, 11, 12];
+const pushButtonPins = [5, 6, 7, 8];
 // Initialize
 const conn = new soundcraft_ui_connection_1.SoundcraftUI("10.0.1.2");
 conn.connect();
 // Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
 let modeIndex = 0;
+let mode = "mutesA"; // You will regret changing this...
+console.log(mode);
 // Define LED and button pins
-const ledPinNumbers = [9, 10, 11, 12];
-const pushButtonPins = [5, 6, 7, 8];
 const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
-const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: 75 }));
+const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
 // LED and button arrays
 const [LED1, LED2, LED3, LED4] = LED;
 const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
@@ -39,10 +45,10 @@ function subscribeLED(LEDindex, LED) {
         if (index === 1) {
             subscriptionMap[index] = conn.player.state$.subscribe((state) => {
                 if (state === soundcraft_ui_connection_2.PlayerState.Playing) {
-                    LED.writeSync(1);
+                    LED.writeSync(LED_ON);
                 }
                 else {
-                    LED.writeSync(0);
+                    LED.writeSync(LED_OFF);
                 }
             });
         }
@@ -50,10 +56,10 @@ function subscribeLED(LEDindex, LED) {
             // Led4 is based on recorder state
             subscriptionMap[index] = conn.recorderMultiTrack.recording$.subscribe((recording) => {
                 if (recording == 1) {
-                    LED.writeSync(1);
+                    LED.writeSync(LED_ON);
                 }
                 else {
-                    LED.writeSync(0);
+                    LED.writeSync(LED_OFF);
                 }
             });
         }
@@ -70,7 +76,7 @@ function subscribeLED(LEDindex, LED) {
 }
 function unsubscribeLEDs() {
     for (const led of leds) {
-        led.writeSync(0); // Turn off the LED
+        led.writeSync(LED_OFF); // Turn off the LED
     }
     for (const index in subscriptionMap) {
         if (subscriptionMap.hasOwnProperty(index)) {
@@ -85,10 +91,7 @@ function handleMuteEvent(buttonNumber) {
             const group = ledIndexMap[mode][buttonNumber - 1];
             console.log(mode);
             console.log(group);
-            if (typeof group === 'number') {
-                conn.muteGroup(group).toggle();
-            }
-            else if (typeof group === 'string') {
+            if (typeof group === 'number' || typeof group === 'string') {
                 conn.muteGroup(group).toggle();
             }
             console.log('Pushed Button:', group);
@@ -100,10 +103,10 @@ function handleSamplerEvent(buttonNumber) {
     return (err, value) => {
         if (!err) {
             // Turn on the LED
-            leds[buttonNumber - 1].writeSync(1);
+            leds[buttonNumber - 1].writeSync(LED_ON);
             if (audio) {
-                audio.kill(); // Stop audio playback if button is pressed again
-                leds[buttonNumber - 1].writeSync(0);
+                audio.kill(); // Stop audio playback if the button is pressed again
+                leds[buttonNumber - 1].writeSync(LED_OFF);
                 audio = null;
             }
             else {
@@ -116,7 +119,7 @@ function handleSamplerEvent(buttonNumber) {
                         console.log('Played sample', buttonNumber);
                         audio = null;
                     }
-                    leds[buttonNumber - 1].writeSync(0);
+                    leds[buttonNumber - 1].writeSync(LED_OFF);
                 });
             }
         }
@@ -125,64 +128,55 @@ function handleSamplerEvent(buttonNumber) {
 function handlePlayerEvent(buttonNumber) {
     return (err, value) => {
         if (!err) {
-            if (buttonNumber == 1) {
-                // Create a new destroy$ subject for each button press
-                let destroy$ = new rxjs_1.Subject();
-                // Subscribe to player state with takeUntil
-                conn.player.state$
-                    .pipe((0, operators_1.takeUntil)(destroy$))
-                    .subscribe((state) => {
-                    if (state == soundcraft_ui_connection_2.PlayerState.Playing) {
-                        console.log('stopping');
-                        destroy$.next(); // Signal unsubscription
-                        destroy$.complete();
-                        conn.master.player(1).fadeTo(0, 3000);
-                        setTimeout(() => {
-                            conn.player.pause();
-                        }, 3000);
-                    }
-                    else {
-                        console.log('playing');
-                        conn.player.play();
-                        conn.master.player(1).fadeToDB(-25, 3000);
-                        destroy$.next(); // Signal unsubscription
-                        destroy$.complete();
-                    }
-                });
-            }
-            else if (buttonNumber == 2) {
-                conn.player.prev();
-            }
-            else if (buttonNumber == 3) {
-                conn.player.next();
-            }
-            else if (buttonNumber == 4) {
-                conn.recorderMultiTrack.recordToggle();
+            switch (buttonNumber) {
+                case 1:
+                    handlePlayerButton1();
+                    break;
+                case 2:
+                    conn.player.prev();
+                    break;
+                case 3:
+                    conn.player.next();
+                    break;
+                case 4:
+                    conn.recorderMultiTrack.recordToggle();
+                    break;
             }
         }
     };
 }
+function handlePlayerButton1() {
+    let destroy$ = new rxjs_1.Subject();
+    conn.player.state$
+        .pipe((0, operators_1.takeUntil)(destroy$))
+        .subscribe((state) => {
+        if (state == soundcraft_ui_connection_2.PlayerState.Playing) {
+            console.log('stopping');
+            destroy$.next(); // Signal unsubscription
+            destroy$.complete();
+            conn.master.player(1).fadeTo(0, 3000);
+            setTimeout(() => {
+                conn.player.pause();
+            }, 3000);
+        }
+        else {
+            console.log('playing');
+            conn.player.play();
+            conn.master.player(1).fadeToDB(-25, 3000);
+            destroy$.next(); // Signal unsubscription
+            destroy$.complete();
+        }
+    });
+}
 function stopButtonListeners() {
     buttons.forEach((button) => button.unwatchAll());
 }
-let mode = "mutesA"; //you will regret changing this...
-console.log(mode);
-const initialIndexes = ledIndexMap[mode];
-updateSubscriptions();
-// Watch buttons
-buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
-// Initialize mode button and set up mode change logic
-const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: 75 });
-let isModeButtonPressed = false;
-let shutdownTimeout = null;
-// Function to handle mode change
 function handleModeChange() {
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
-    // Handle button events per mode
     if (mode === "sampler") {
         buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
     }
@@ -193,7 +187,10 @@ function handleModeChange() {
         buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
     }
 }
-// Function to handle shutdown
+// Initialize mode button and set up mode change logic
+const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+let isModeButtonPressed = false;
+let shutdownTimeout = null;
 function handleShutdown() {
     console.log('Shutting down...');
     executeShutdownCommand();
@@ -203,7 +200,6 @@ modeButton.watch((err, value) => {
         throw err;
     }
     if (value === 0) {
-        // Button pressed
         isModeButtonPressed = true;
         shutdownTimeout = setTimeout(() => {
             if (isModeButtonPressed) {
@@ -213,12 +209,10 @@ modeButton.watch((err, value) => {
         }, 3000);
     }
     else if (value === 1) {
-        // Button released
         if (isModeButtonPressed) {
             handleModeChange();
         }
         isModeButtonPressed = false;
-        // Clear the shutdown timeout if it exists
         if (shutdownTimeout) {
             clearTimeout(shutdownTimeout);
             shutdownTimeout = null;
@@ -233,13 +227,11 @@ function updateSubscriptions() {
             subscribeLED(indexes[i], leds[i]);
         }
     }
-    // Check for "player" mode and explicitly call subscribeLED for LEDs 1 and 4
     if (mode === "player") {
         subscribeLED(1, LED1);
         subscribeLED(4, LED4);
     }
 }
-// listen to keypress
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY)
     process.stdin.setRawMode(true);
@@ -251,7 +243,6 @@ process.stdin.on("keypress", (str, key) => {
         mode = modes[modeIndex];
         console.log('Mode now', mode);
         updateSubscriptions();
-        // Handle button events per mode
         if (mode === "sampler") {
             buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
         }
@@ -263,10 +254,9 @@ process.stdin.on("keypress", (str, key) => {
         }
     }
 });
-// Handle program termination and unexport GPIO pins
 function unexportOnClose() {
     leds.forEach((led) => {
-        led.writeSync(0);
+        led.writeSync(LED_OFF);
         led.unexport();
     });
     pushButtons.forEach((button) => {
@@ -284,4 +274,4 @@ function executeShutdownCommand() {
         }
     });
 }
-process.on('SIGINT', unexportOnClose); // ctrl+c handling
+process.on('SIGINT', unexportOnClose);
