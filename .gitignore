@@ -2,3 +2,7 @@ node_modules
 sandbox.ts
 tsconfig.OLD
 samples/
+build/audiotest.js
+src/audiotest.ts
+src/index.tsaudioissue
+
