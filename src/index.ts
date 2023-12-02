@@ -20,8 +20,8 @@ conn.connect();
 
 // Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
-let modeIndex = 0;
-let mode: string = "mutesA"; // You will regret changing this...
+let modeIndex = 3; //so that on initial handleMode we get mutes A
+let mode: string = "sampler"; // You will regret changing this...
 console.log(mode);
 
 // Define LED and button pins
@@ -42,6 +42,9 @@ const ledIndexMap: { [mode: string]: (number | string)[] } = {
 
 // Create a map to track subscriptions
 const subscriptionMap: { [index: number | string]: Subscription } = {};
+
+// Initial LED subscription and mode setup
+handleModeChange();
 
 function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
   let index: number | string = LEDindex;
@@ -250,7 +253,7 @@ function updateSubscriptions() {
 
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
-
+/*
 process.stdin.on("keypress", (str, key) => {
   if (key.name == "m") {
     console.log("M");
@@ -269,7 +272,7 @@ process.stdin.on("keypress", (str, key) => {
     }
   }
 });
-
+*/
 function unexportOnClose() {
   leds.forEach((led) => {
     led.writeSync(LED_OFF);

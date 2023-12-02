@@ -36,6 +36,8 @@ const ledIndexMap = {
 };
 // Create a map to track subscriptions
 const subscriptionMap = {};
+// Initial LED subscription
+updateSubscriptions();
 function subscribeLED(LEDindex, LED) {
     let index = LEDindex;
     if (subscriptionMap[index]) {
