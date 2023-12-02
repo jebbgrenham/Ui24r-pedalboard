@@ -177,41 +177,60 @@ updateSubscriptions();
 buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
 
 // Initialize mode button and set up mode change logic
-const modeButton = new Gpio(4, 'in', 'rising', { debounceTimeout: 75 });
-let shutdownTimer: NodeJS.Timeout | null = null;
+const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: 75 });
+
+let isModeButtonPressed = false;
+let shutdownTimeout: NodeJS.Timeout | null = null;
+
+// Function to handle mode change
+function handleModeChange() {
+  stopButtonListeners();
+  modeIndex = (modeIndex + 1) % modes.length;
+  mode = modes[modeIndex];
+  console.log('Mode now', mode);
+  updateSubscriptions();
+
+  // Handle button events per mode
+  if (mode === "sampler") {
+    buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+  } else if (mode === "player") {
+    buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+  } else {
+    buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+  }
+}
+
+// Function to handle shutdown
+function handleShutdown() {
+  console.log('Shutting down...');
+  executeShutdownCommand();
+}
 
 modeButton.watch((err: any, value: any) => {
   if (err) {
     throw err;
   }
-  if (value === 1) {
-    // Button pressed, start the timer for shutdown
-    shutdownTimer = setTimeout(() => {
-      // If the button is still pressed after 3 seconds, initiate shutdown
-      console.log('Shutting down...');
-      executeShutdownCommand();
+
+  if (value === 0) {
+    // Button pressed
+    isModeButtonPressed = true;
+    shutdownTimeout = setTimeout(() => {
+      if (isModeButtonPressed) {
+        handleShutdown();
+      }
+      shutdownTimeout = null;
     }, 3000);
-
-    // Your existing mode change logic here
-    stopButtonListeners();
-    modeIndex = (modeIndex + 1) % modes.length;
-    mode = modes[modeIndex];
-    console.log('Mode now', mode);
-    updateSubscriptions();
-
-    // Handle button events per mode
-    if (mode === "sampler") {
-      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-    } else if (mode === "player") {
-      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-    } else {
-      buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+  } else if (value === 1) {
+    // Button released
+    if (isModeButtonPressed) {
+      handleModeChange();
     }
-  } else {
-    // Button released, clear the timer
-    if (shutdownTimer) {
-      clearTimeout(shutdownTimer);
-      shutdownTimer = null;
+    isModeButtonPressed = false;
+
+    // Clear the shutdown timeout if it exists
+    if (shutdownTimeout) {
+      clearTimeout(shutdownTimeout);
+      shutdownTimeout = null;
     }
   }
 });
@@ -270,7 +289,7 @@ function unexportOnClose() {
 function executeShutdownCommand() {
   const exec = require('child_process').exec;
 
-  exec('echo long pressed', (error: Error | null, stdout: string, stderr: string) => {
+  exec('sudo shutdown -h now', (error: Error | null, stdout: string, stderr: string) => {
     if (error) {
       console.error(`Error during shutdown: ${error}`);
     } else {
