@@ -7,12 +7,12 @@ import { takeUntil } from 'rxjs/operators';
 const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
 const readline = require('readline');
- 
+
 // Initialize
 const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
 
-// Define modes 
+// Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
 let modeIndex = 0;
 
@@ -103,7 +103,6 @@ function handleMuteEvent(buttonNumber: number) {
 function handleSamplerEvent(buttonNumber: number) {
   let audio: any = null;
   return (err: string | null, value: string | null) => {
-
     if (!err) {
       // Turn on the LED
       leds[buttonNumber - 1].writeSync(1);
@@ -126,7 +125,6 @@ function handleSamplerEvent(buttonNumber: number) {
     }
   };
 }
-//import { Subscription } from 'rxjs';
 
 function handlePlayerEvent(buttonNumber: number) {
   return (err: string, value: string) => {
@@ -180,25 +178,42 @@ buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
 
 // Initialize mode button and set up mode change logic
 const modeButton = new Gpio(4, 'in', 'rising', { debounceTimeout: 75 });
+let shutdownTimer: NodeJS.Timeout | null = null;
+
 modeButton.watch((err: any, value: any) => {
   if (err) {
     throw err;
   }
   if (value === 1) {
+    // Button pressed, start the timer for shutdown
+    shutdownTimer = setTimeout(() => {
+      // If the button is still pressed after 3 seconds, initiate shutdown
+      console.log('Shutting down...');
+      executeShutdownCommand();
+    }, 3000);
+
+    // Your existing mode change logic here
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
-// Handle button events per mode
-  if (mode === "sampler") {
-    buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-  } else if (mode === "player") {
-    buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+
+    // Handle button events per mode
+    if (mode === "sampler") {
+      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+    } else if (mode === "player") {
+      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+    } else {
+      buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+    }
   } else {
-    buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+    // Button released, clear the timer
+    if (shutdownTimer) {
+      clearTimeout(shutdownTimer);
+      shutdownTimer = null;
+    }
   }
-}
 });
 
 function updateSubscriptions() {
@@ -222,25 +237,23 @@ readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 
 process.stdin.on("keypress", (str, key) => {
-    if(key.name == "m") { 
+  if (key.name == "m") {
     console.log("M")
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
-// Handle button events per mode
-  if (mode === "sampler") {
-    buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-  } else if (mode === "player") {
-    buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-  } else {
-    buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+    // Handle button events per mode
+    if (mode === "sampler") {
+      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+    } else if (mode === "player") {
+      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+    } else {
+      buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
+    }
   }
-
-  }
-})
-// END LISTEN KEYPRESS
+});
 
 // Handle program termination and unexport GPIO pins
 function unexportOnClose() {
@@ -251,6 +264,18 @@ function unexportOnClose() {
 
   pushButtons.forEach((button) => {
     button.unexport();
+  });
+}
+
+function executeShutdownCommand() {
+  const exec = require('child_process').exec;
+
+  exec('echo long pressed', (error: Error | null, stdout: string, stderr: string) => {
+    if (error) {
+      console.error(`Error during shutdown: ${error}`);
+    } else {
+      console.log('Shutdown initiated successfully.');
+    }
   });
 }
 
