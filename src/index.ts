@@ -2,9 +2,9 @@ import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { PlayerState, MtkState } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
 const readline = require('readline');
+import { exec, ExecException } from 'child_process';
 
 // Constants
 const LED_OFF = 0;
@@ -107,9 +107,12 @@ function handleMuteEvent(buttonNumber: number) {
   };
 }
 
+
+
 function handleSamplerEvent(buttonNumber: number) {
   let audio: any = null;
-  return (err: string | null, value: string | null) => {
+
+  return (err: ExecException | null, value: string | null) => {
     if (!err) {
       // Turn on the LED
       leds[buttonNumber - 1].writeSync(LED_ON);
@@ -119,7 +122,9 @@ function handleSamplerEvent(buttonNumber: number) {
         audio = null;
       } else {
         console.log('trying to play');
-        audio = player.play('/home/admin/samples/' + buttonNumber + '.wav', (err: string | null) => {
+        const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
+
+        audio = exec(soundCommand, (err, stdout, stderr) => {
           if (err) {
             console.log(`Could not play sound/sound stopped: ${err}`);
           } else {
@@ -285,8 +290,6 @@ function unexportOnClose() {
 }
 
 function executeShutdownCommand() {
-  const exec = require('child_process').exec;
-
   exec('sudo shutdown -h now', (error: Error | null, stdout: string, stderr: string) => {
     if (error) {
       console.error(`Error during shutdown: ${error}`);

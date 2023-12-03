@@ -4,9 +4,9 @@ const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const soundcraft_ui_connection_2 = require("soundcraft-ui-connection");
 const rxjs_1 = require("rxjs");
 const operators_1 = require("rxjs/operators");
-const player = require('play-sound')();
 const Gpio = require('onoff').Gpio;
 const readline = require('readline');
+const child_process_1 = require("child_process");
 // Constants
 const LED_OFF = 0;
 const LED_ON = 1;
@@ -18,8 +18,8 @@ const conn = new soundcraft_ui_connection_1.SoundcraftUI("10.0.1.2");
 conn.connect();
 // Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
-let modeIndex = 0;
-let mode = "mutesA"; // You will regret changing this...
+let modeIndex = 3; //so that on initial handleMode we get mutes A
+let mode = "sampler"; // You will regret changing this...
 console.log(mode);
 // Define LED and button pins
 const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
@@ -36,8 +36,8 @@ const ledIndexMap = {
 };
 // Create a map to track subscriptions
 const subscriptionMap = {};
-// Initial LED subscription
-updateSubscriptions();
+// Initial LED subscription and mode setup
+handleModeChange();
 function subscribeLED(LEDindex, LED) {
     let index = LEDindex;
     if (subscriptionMap[index]) {
@@ -113,7 +113,8 @@ function handleSamplerEvent(buttonNumber) {
             }
             else {
                 console.log('trying to play');
-                audio = player.play('/home/admin/samples/' + buttonNumber + '.wav', (err) => {
+                const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
+                audio = (0, child_process_1.exec)(soundCommand, (err, stdout, stderr) => {
                     if (err) {
                         console.log(`Could not play sound/sound stopped: ${err}`);
                     }
@@ -237,25 +238,26 @@ function updateSubscriptions() {
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY)
     process.stdin.setRawMode(true);
+/*
 process.stdin.on("keypress", (str, key) => {
-    if (key.name == "m") {
-        console.log("M");
-        stopButtonListeners();
-        modeIndex = (modeIndex + 1) % modes.length;
-        mode = modes[modeIndex];
-        console.log('Mode now', mode);
-        updateSubscriptions();
-        if (mode === "sampler") {
-            buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-        }
-        else if (mode === "player") {
-            buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-        }
-        else {
-            buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
-        }
+  if (key.name == "m") {
+    console.log("M");
+    stopButtonListeners();
+    modeIndex = (modeIndex + 1) % modes.length;
+    mode = modes[modeIndex];
+    console.log('Mode now', mode);
+    updateSubscriptions();
+
+    if (mode === "sampler") {
+      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+    } else if (mode === "player") {
+      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+    } else {
+      buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
     }
+  }
 });
+*/
 function unexportOnClose() {
     leds.forEach((led) => {
         led.writeSync(LED_OFF);
@@ -266,8 +268,7 @@ function unexportOnClose() {
     });
 }
 function executeShutdownCommand() {
-    const exec = require('child_process').exec;
-    exec('sudo shutdown -h now', (error, stdout, stderr) => {
+    (0, child_process_1.exec)('sudo shutdown -h now', (error, stdout, stderr) => {
         if (error) {
             console.error(`Error during shutdown: ${error}`);
         }
