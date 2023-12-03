@@ -68,9 +68,6 @@ async function discoverSoundcraftUI(): Promise<string | null> {
   return null; // No reachable device found
 }
 
-// Initialize the SoundcraftUI connection
-let conn: SoundcraftUI = null;
-
 async function initializeSoundcraftUIConnection(): Promise<void> {
   const discoveredIP = await discoverSoundcraftUI();
 
@@ -82,9 +79,8 @@ async function initializeSoundcraftUIConnection(): Promise<void> {
   }
 }
 
-// Call the function to start the initialization
-initializeSoundcraftUIConnection();
-
+// Initialize the SoundcraftUI connection
+const conn = new SoundcraftUI(initializeSoundcraftUIConnection());
 
 // Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
