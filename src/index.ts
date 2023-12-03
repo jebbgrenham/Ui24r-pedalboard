@@ -4,7 +4,9 @@ import { interval, Subscription, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { exec, ExecException } from 'child_process';
 import * as os from 'os';
-import { ping } from 'ping';
+const ping = require('ping');
+
+
 
 // Constants
 const Gpio = require('onoff').Gpio;
@@ -15,9 +17,9 @@ const DEBOUNCE_TIMEOUT = 75;
 const ledPinNumbers = [9, 10, 11, 12];
 const pushButtonPins = [5, 6, 7, 8];
 
-// Initialize
-const conn = new SoundcraftUI("10.0.1.2");
-conn.connect();
+// Initialize - OLD single network static IP.
+//const conn = new SoundcraftUI("10.0.1.2");
+//conn.connect();
 
 // Function to get the subnet based on the device's IP on wlan0
 function getSubnet(): string | null {
@@ -29,6 +31,7 @@ function getSubnet(): string | null {
 
     if (ipAddress) {
       // Assuming the subnet is in the format 'xxx.xxx.xxx'
+      console.log('IP is ', ipAddress)
       const subnet = ipAddress.split('.').slice(0, 3).join('.');
       return subnet;
     }
@@ -40,7 +43,7 @@ function getSubnet(): string | null {
 // Function to check if a device is reachable
 async function isDeviceReachable(ip: string): Promise<boolean> {
   try {
-    const result = await ping.promise.probe(ip);
+    const result: any = await ping.promise.probe(ip);
     return result.alive;
   } catch (error) {
     return false;
@@ -66,11 +69,13 @@ async function discoverSoundcraftUI(): Promise<string | null> {
 }
 
 // Initialize the SoundcraftUI connection
+let conn: SoundcraftUI = null;
+
 async function initializeSoundcraftUIConnection(): Promise<void> {
   const discoveredIP = await discoverSoundcraftUI();
 
   if (discoveredIP) {
-    const conn = new SoundcraftUI(discoveredIP);
+    conn = new SoundcraftUI(discoveredIP);
     conn.connect();
   } else {
     console.error('No SoundcraftUI device found on the network.');
