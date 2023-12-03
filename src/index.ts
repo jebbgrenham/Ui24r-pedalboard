@@ -1,25 +1,11 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
-import { PlayerState, MtkState } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { exec, ExecException } from 'child_process';
 import * as os from 'os';
 const ping = require('ping');
 
-
-
-// Constants
-const Gpio = require('onoff').Gpio;
-const readline = require('readline');
-const LED_OFF = 0;
-const LED_ON = 1;
-const DEBOUNCE_TIMEOUT = 75;
-const ledPinNumbers = [9, 10, 11, 12];
-const pushButtonPins = [5, 6, 7, 8];
-
-// Initialize - OLD single network static IP.
-//const conn = new SoundcraftUI("10.0.1.2");
-//conn.connect();
+let conn: SoundcraftUI;
 
 // Function to get the subnet based on the device's IP on wlan0
 function getSubnet(): string | null {
@@ -31,7 +17,6 @@ function getSubnet(): string | null {
 
     if (ipAddress) {
       // Assuming the subnet is in the format 'xxx.xxx.xxx'
-      console.log('IP is ', ipAddress)
       const subnet = ipAddress.split('.').slice(0, 3).join('.');
       return subnet;
     }
@@ -40,328 +25,106 @@ function getSubnet(): string | null {
   return null;
 }
 
-// Function to check if a device is reachable
-async function isDeviceReachable(ip: string): Promise<boolean> {
-  try {
-    const result: any = await ping.promise.probe(ip);
-    return result.alive;
-  } catch (error) {
-    return false;
-  }
-}
-
-// Function to find the SoundcraftUI device on the network
 async function discoverSoundcraftUI(): Promise<string | null> {
   const subnet = getSubnet();
-
+  console.log("Subnet is ", subnet)
   if (subnet) {
-    for (let i = 1; i <= 255; i++) {
-      const ip = `${subnet}.${i}`;
-      const isReachable = await isDeviceReachable(ip);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const pingPromises: Promise<[string, boolean] | null>[] = [];
 
-      if (isReachable) {
-        return ip;
+      for (let i = 1; i <= 255; i++) {
+        const ip = `${subnet}.${i}`;
+        pingPromises.push(pingAndCheck(ip));
+      }
+
+      const results = await Promise.all(pingPromises);
+
+      for (const result of results) {
+        if (result && result[1]) {
+          const connectedIP = await attemptConnection(result[0]);
+          if (connectedIP) {
+            return connectedIP;
+          }
+        }
       }
     }
   }
 
-  return null; // No reachable device found
+  return null; // No reachable device found after 5 attempts
 }
 
-async function initializeSoundcraftUIConnection(): Promise<void> {
+async function pingAndCheck(ip: string): Promise<[string, boolean] | null> {
+  try {
+    const result: any = await ping.promise.probe(ip);
+    return [ip, result.alive];
+  } catch (error) {
+    return null;
+  }
+}
+
+// ...
+
+
+async function attemptConnection(ip: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    conn = new SoundcraftUI(ip);
+
+    // Subscribe to status changes
+    const statusSubscription = conn.status$.subscribe(status => {
+      //console.log('Connection status:', status);
+
+      if (status.type === 'OPEN') {
+        // Connection successful, complete the Promise
+        console.log('Ah excellent! Here is a mixer I can talk to')
+        statusSubscription.unsubscribe();
+        resolve(ip);
+      } else if (status.type === 'ERROR') {
+        // Connection error, move on to the next IP
+        console.log('Nope,', ip, 'is not a mixer :\(')
+        statusSubscription.unsubscribe();
+        resolve(null);
+      }
+    });
+
+    try {
+      // Connect and wait for the operation to finish
+      conn.connect().then(() => {
+        // Handle cases where 'OPEN' status is not reached
+        console.error(`Connection to ${ip} did not reach 'OPEN' status.`);
+        resolve(null);
+      });
+    } catch (error) {
+      // Handle connection errors
+      console.error(`Connection to ${ip} failed:`, error);
+      resolve(null);
+    }
+  });
+}
+
+// ...
+
+async function initializeSoundcraftUIConnection(): Promise<boolean> {
   const discoveredIP = await discoverSoundcraftUI();
 
-  if (discoveredIP) {
-    conn = new SoundcraftUI(discoveredIP);
-    conn.connect();
-  } else {
+  if (!discoveredIP) {
     console.error('No SoundcraftUI device found on the network.');
-  }
-}
-
-// Initialize the SoundcraftUI connection
-const conn = new SoundcraftUI(initializeSoundcraftUIConnection());
-
-// Define modes
-const modes = ["mutesA", "mutesB", "player", "sampler"];
-let modeIndex = 3; //so that on initial handleMode we get mutes A
-let mode: string = "sampler"; // You will regret changing this...
-console.log(mode);
-
-// Define LED and button pins
-const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
-const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
-
-// LED and button arrays
-const [LED1, LED2, LED3, LED4] = LED;
-const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
-const buttons = [pushButton1, pushButton2, pushButton3, pushButton4];
-const leds = [LED1, LED2, LED3, LED4];
-
-// Define the LED index mapping
-const ledIndexMap: { [mode: string]: (number | string)[] } = {
-  mutesA: ['all', 'fx', 1, 2],
-  mutesB: [3, 4, 5, 6],
-};
-
-// Create a map to track subscriptions
-const subscriptionMap: { [index: number | string]: Subscription } = {};
-
-// Initial LED subscription and mode setup
-handleModeChange();
-
-function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
-  let index: number | string = LEDindex;
-  if (subscriptionMap[index]) {
-    subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
-  }
-  if (mode === "player") {
-    if (index === 1) {
-      subscriptionMap[index] = conn.player.state$.subscribe((state: PlayerState) => {
-        if (state === PlayerState.Playing) {
-          LED.writeSync(LED_ON);
-        } else {
-          LED.writeSync(LED_OFF);
-        }
-      });
-    } else if (index === 4) {
-      // Led4 is based on recorder state
-      subscriptionMap[index] = conn.recorderMultiTrack.recording$.subscribe((recording: number) => {
-        if (recording == 1) {
-          LED.writeSync(LED_ON);
-        } else {
-          LED.writeSync(LED_OFF);
-        }
-      });
-    }
-  } else if (mode === "mutesA" || mode === "mutesB") {
-    subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
-      LED.writeSync(state);
-      console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
-    });
-  } else {
-    // Retain the original behavior for other modes
-  }
-}
-
-function unsubscribeLEDs() {
-  for (const led of leds) {
-    led.writeSync(LED_OFF); // Turn off the LED
+    return false;
   }
 
-  for (const index in subscriptionMap) {
-    if (subscriptionMap.hasOwnProperty(index)) {
-      subscriptionMap[index].unsubscribe();
-      delete subscriptionMap[index];
-    }
-  }
+  console.log('Connected to SoundcraftUI at:', discoveredIP);
+  return true;
 }
 
-function handleMuteEvent(buttonNumber: number) {
-  return (err: string, value: string) => {
-    if (!err) {
-      const group = ledIndexMap[mode][buttonNumber - 1];
-      console.log(mode);
-      console.log(group);
-      if (typeof group === 'number' || typeof group === 'string') {
-        conn.muteGroup(group as any).toggle();
-      }
-      console.log('Pushed Button:', group);
-    }
-  };
-}
-
-
-
-function handleSamplerEvent(buttonNumber: number) {
-  let audio: any = null;
-
-  return (err: ExecException | null, value: string | null) => {
-    if (!err) {
-      // Turn on the LED
-      leds[buttonNumber - 1].writeSync(LED_ON);
-      if (audio) {
-        audio.kill(); // Stop audio playback if the button is pressed again
-        leds[buttonNumber - 1].writeSync(LED_OFF);
-        audio = null;
-      } else {
-        console.log('trying to play');
-        const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
-
-        audio = exec(soundCommand, (err, stdout, stderr) => {
-          if (err) {
-            console.log(`Could not play sound/sound stopped: ${err}`);
-          } else {
-            console.log('Played sample', buttonNumber);
-            audio = null;
-          }
-          leds[buttonNumber - 1].writeSync(LED_OFF);
-        });
-      }
-    }
-  };
-}
-
-function handlePlayerEvent(buttonNumber: number) {
-  return (err: string, value: string) => {
-    if (!err) {
-      switch (buttonNumber) {
-        case 1:
-          handlePlayerButton1();
-          break;
-        case 2:
-          conn.player.prev();
-          break;
-        case 3:
-          conn.player.next();
-          break;
-        case 4:
-          conn.recorderMultiTrack.recordToggle();
-          break;
-      }
-    }
-  };
-}
-
-function handlePlayerButton1() {
-  let destroy$ = new Subject<void>();
-
-  conn.player.state$
-    .pipe(takeUntil(destroy$))
-    .subscribe((state: PlayerState) => {
-      if (state == PlayerState.Playing) {
-        console.log('stopping');
-        destroy$.next(); // Signal unsubscription
-        destroy$.complete();
-        conn.master.player(1).fadeTo(0, 3000);
-        setTimeout(() => {
-          conn.player.pause();
-        }, 3000);
-      } else {
-        console.log('playing');
-        conn.player.play();
-        conn.master.player(1).fadeToDB(-25, 3000);
-        destroy$.next(); // Signal unsubscription
-        destroy$.complete();
-      }
-    });
-}
-
-function stopButtonListeners() {
-  buttons.forEach((button) => button.unwatchAll());
-}
-
-function handleModeChange() {
-  stopButtonListeners();
-  modeIndex = (modeIndex + 1) % modes.length;
-  mode = modes[modeIndex];
-  console.log('Mode now', mode);
-  updateSubscriptions();
-
-  if (mode === "sampler") {
-    buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-  } else if (mode === "player") {
-    buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-  } else {
-    buttons.forEach((button, index) =>
-    button.watch(handleMuteEvent(index + 1)));
-  }
-}
-
-// Initialize mode button and set up mode change logic
-const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
-
-let isModeButtonPressed = false;
-let shutdownTimeout: NodeJS.Timeout | null = null;
-
-function handleShutdown() {
-  console.log('Shutting down...');
-  executeShutdownCommand();
-}
-
-modeButton.watch((err: any, value: any) => {
-  if (err) {
-    throw err;
+async function main() {
+  if (!(await initializeSoundcraftUIConnection())) {
+    console.log('No connection')
+    // i2c display ERRC
+    return;
   }
 
-  if (value === 0) {
-    isModeButtonPressed = true;
-    shutdownTimeout = setTimeout(() => {
-      if (isModeButtonPressed) {
-        handleShutdown();
-      }
-      shutdownTimeout = null;
-    }, 3000);
-  } else if (value === 1) {
-    if (isModeButtonPressed) {
-      handleModeChange();
-    }
-    isModeButtonPressed = false;
-
-    if (shutdownTimeout) {
-      clearTimeout(shutdownTimeout);
-      shutdownTimeout = null;
-    }
-  }
-});
-
-function updateSubscriptions() {
-  unsubscribeLEDs();
-  const indexes = ledIndexMap[mode];
-  if (indexes) {
-    for (let i = 0; i < leds.length; i++) {
-      subscribeLED(indexes[i], leds[i]);
-    }
-  }
-
-  if (mode === "player") {
-    subscribeLED(1, LED1);
-    subscribeLED(4, LED4);
-  }
+  // Code here will only run if the connection is successfully established.
+  console.log('CONNECTION MADE')
+  //call the main interface
 }
 
-readline.emitKeypressEvents(process.stdin);
-if (process.stdin.isTTY) process.stdin.setRawMode(true);
-/*
-process.stdin.on("keypress", (str, key) => {
-  if (key.name == "m") {
-    console.log("M");
-    stopButtonListeners();
-    modeIndex = (modeIndex + 1) % modes.length;
-    mode = modes[modeIndex];
-    console.log('Mode now', mode);
-    updateSubscriptions();
-
-    if (mode === "sampler") {
-      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-    } else if (mode === "player") {
-      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-    } else {
-      buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
-    }
-  }
-});
-*/
-function unexportOnClose() {
-  leds.forEach((led) => {
-    led.writeSync(LED_OFF);
-    led.unexport();
-  });
-
-  pushButtons.forEach((button) => {
-    button.unexport();
-  });
-}
-
-function executeShutdownCommand() {
-  exec('sudo shutdown -h now', (error: Error | null, stdout: string, stderr: string) => {
-    if (error) {
-      console.error(`Error during shutdown: ${error}`);
-    } else {
-      console.log('Shutdown initiated successfully.');
-    }
-  });
-}
-
-process.on('SIGINT', unexportOnClose);
-
+main(); // Call the asynchronous function to start the execution.
