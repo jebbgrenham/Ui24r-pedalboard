@@ -1,7 +1,5 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { exec, ExecException } from 'child_process';
 import * as os from 'os';
 const ping = require('ping');
 
@@ -111,20 +109,27 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
     return false;
   }
 
-  console.log('Connected to SoundcraftUI at:', discoveredIP);
-  return true;
+  conn = new SoundcraftUI(discoveredIP);
+
+  try {
+    await conn.connect();
+    console.log('Connected to SoundcraftUI at:', discoveredIP);
+    return true;
+  } catch (error) {
+    console.error(`Connection to ${discoveredIP} failed:`, error);
+    return false;
+  }
 }
 
-async function main() {
+export async function connectAndReturnConn(): Promise<SoundcraftUI | null> {
   if (!(await initializeSoundcraftUIConnection())) {
-    console.log('No connection')
+    console.log('No connection');
     // i2c display ERRC
-    return;
+    return null;
   }
 
-  // Code here will only run if the connection is successfully established.
-  console.log('CONNECTION MADE')
-  //call the main interface
+  // Return the established connection
+  return conn;
 }
 
-main(); // Call the asynchronous function to start the execution.
+initializeSoundcraftUIConnection();

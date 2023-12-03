@@ -32,6 +32,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.connectAndReturnConn = void 0;
 const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const os = __importStar(require("os"));
 const ping = require('ping');
@@ -51,14 +52,12 @@ function getSubnet() {
     }
     return null;
 }
-// ...
-// ...
 function discoverSoundcraftUI() {
     return __awaiter(this, void 0, void 0, function* () {
         const subnet = getSubnet();
         console.log("Subnet is ", subnet);
         if (subnet) {
-            while (true) {
+            for (let attempt = 0; attempt < 5; attempt++) {
                 const pingPromises = [];
                 for (let i = 1; i <= 255; i++) {
                     const ip = `${subnet}.${i}`;
@@ -75,10 +74,9 @@ function discoverSoundcraftUI() {
                 }
             }
         }
-        return null; // This line will never be reached
+        return null; // No reachable device found after 5 attempts
     });
 }
-// ...
 function pingAndCheck(ip) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -131,12 +129,32 @@ function attemptConnection(ip) {
 function initializeSoundcraftUIConnection() {
     return __awaiter(this, void 0, void 0, function* () {
         const discoveredIP = yield discoverSoundcraftUI();
-        if (discoveredIP) {
-            console.log('Connected to SoundcraftUI at:', discoveredIP);
-        }
-        else {
+        if (!discoveredIP) {
             console.error('No SoundcraftUI device found on the network.');
+            return false;
+        }
+        conn = new soundcraft_ui_connection_1.SoundcraftUI(discoveredIP);
+        try {
+            yield conn.connect();
+            console.log('Connected to SoundcraftUI at:', discoveredIP);
+            return true;
+        }
+        catch (error) {
+            console.error(`Connection to ${discoveredIP} failed:`, error);
+            return false;
         }
     });
 }
+function connectAndReturnConn() {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!(yield initializeSoundcraftUIConnection())) {
+            console.log('No connection');
+            // i2c display ERRC
+            return null;
+        }
+        // Return the established connection
+        return conn;
+    });
+}
+exports.connectAndReturnConn = connectAndReturnConn;
 initializeSoundcraftUIConnection();
