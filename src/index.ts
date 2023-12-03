@@ -2,21 +2,84 @@ import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { PlayerState, MtkState } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-const Gpio = require('onoff').Gpio;
-const readline = require('readline');
 import { exec, ExecException } from 'child_process';
+import * as os from 'os';
+import { ping } from 'ping';
 
 // Constants
+const Gpio = require('onoff').Gpio;
+const readline = require('readline');
 const LED_OFF = 0;
 const LED_ON = 1;
 const DEBOUNCE_TIMEOUT = 75;
-
 const ledPinNumbers = [9, 10, 11, 12];
 const pushButtonPins = [5, 6, 7, 8];
 
 // Initialize
 const conn = new SoundcraftUI("10.0.1.2");
 conn.connect();
+
+// Function to get the subnet based on the device's IP on wlan0
+function getSubnet(): string | null {
+  const networkInterfaces = os.networkInterfaces();
+  const wlan0Interface = networkInterfaces['wlan0'];
+
+  if (wlan0Interface) {
+    const ipAddress = wlan0Interface.find((info) => info.family === 'IPv4')?.address;
+
+    if (ipAddress) {
+      // Assuming the subnet is in the format 'xxx.xxx.xxx'
+      const subnet = ipAddress.split('.').slice(0, 3).join('.');
+      return subnet;
+    }
+  }
+
+  return null;
+}
+
+// Function to check if a device is reachable
+async function isDeviceReachable(ip: string): Promise<boolean> {
+  try {
+    const result = await ping.promise.probe(ip);
+    return result.alive;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Function to find the SoundcraftUI device on the network
+async function discoverSoundcraftUI(): Promise<string | null> {
+  const subnet = getSubnet();
+
+  if (subnet) {
+    for (let i = 1; i <= 255; i++) {
+      const ip = `${subnet}.${i}`;
+      const isReachable = await isDeviceReachable(ip);
+
+      if (isReachable) {
+        return ip;
+      }
+    }
+  }
+
+  return null; // No reachable device found
+}
+
+// Initialize the SoundcraftUI connection
+async function initializeSoundcraftUIConnection(): Promise<void> {
+  const discoveredIP = await discoverSoundcraftUI();
+
+  if (discoveredIP) {
+    const conn = new SoundcraftUI(discoveredIP);
+    conn.connect();
+  } else {
+    console.error('No SoundcraftUI device found on the network.');
+  }
+}
+
+// Call the function to start the initialization
+initializeSoundcraftUIConnection();
+
 
 // Define modes
 const modes = ["mutesA", "mutesB", "player", "sampler"];
