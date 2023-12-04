@@ -32,9 +32,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectAndReturnConn = void 0;
 const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const os = __importStar(require("os"));
+const ui24rInterface = __importStar(require("./ui24rInterface"));
 const ping = require('ping');
 let conn;
 // Function to get the subnet based on the device's IP on wlan0
@@ -137,6 +137,8 @@ function initializeSoundcraftUIConnection() {
         try {
             yield conn.connect();
             console.log('Connected to SoundcraftUI at:', discoveredIP);
+            console.log('About to call main iface');
+            ui24rInterface.mainInterface(conn);
             return true;
         }
         catch (error) {
@@ -145,16 +147,4 @@ function initializeSoundcraftUIConnection() {
         }
     });
 }
-function connectAndReturnConn() {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (!(yield initializeSoundcraftUIConnection())) {
-            console.log('No connection');
-            // i2c display ERRC
-            return null;
-        }
-        // Return the established connection
-        return conn;
-    });
-}
-exports.connectAndReturnConn = connectAndReturnConn;
 initializeSoundcraftUIConnection();

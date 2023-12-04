@@ -1,6 +1,9 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
 import * as os from 'os';
+import * as ui24rInterface from './ui24rInterface';
+
+
 const ping = require('ping');
 
 let conn: SoundcraftUI;
@@ -34,8 +37,7 @@ async function discoverSoundcraftUI(): Promise<string | null> {
         const ip = `${subnet}.${i}`;
         pingPromises.push(pingAndCheck(ip));
       }
-
-      const results = await Promise.all(pingPromises);
+     const results = await Promise.all(pingPromises);
 
       for (const result of results) {
         if (result && result[1]) {
@@ -114,22 +116,13 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
   try {
     await conn.connect();
     console.log('Connected to SoundcraftUI at:', discoveredIP);
-    return true;
+    console.log('About to call main iface')
+    ui24rInterface.mainInterface(conn);
+   return true;
   } catch (error) {
     console.error(`Connection to ${discoveredIP} failed:`, error);
     return false;
   }
-}
-
-export async function connectAndReturnConn(): Promise<SoundcraftUI | null> {
-  if (!(await initializeSoundcraftUIConnection())) {
-    console.log('No connection');
-    // i2c display ERRC
-    return null;
-  }
-
-  // Return the established connection
-  return conn;
 }
 
 initializeSoundcraftUIConnection();
