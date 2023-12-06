@@ -4,6 +4,32 @@ import * as os from 'os';
 import * as ui24rInterface from './ui24rInterface';
 
 
+var five = require('johnny-five');
+var Raspi = require("raspi-io").RaspiIO;
+var board = new five.Board({
+  io: new Raspi()
+});
+var AlphaNum4 = require('node-led').AlphaNum4;
+
+board.on('ready', function() {
+  console.log('Connected to Arduino, ready.');
+
+  var opts = {
+    address: 0x70
+  };
+
+  var display = new AlphaNum4(board, opts);
+  display.clearDisplay();
+  display.writeText("Ui24");
+  setTimeout(() => {
+    display.clearDisplay();
+    console.log("Delayed for 10 second.");
+  }, 10000);
+
+});
+
+
+
 const ping = require('ping');
 
 let conn: SoundcraftUI;
@@ -125,4 +151,16 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
   }
 }
 
+function unexportDisplay() {
+  console.log('Closing down');
+}
+
+
 initializeSoundcraftUIConnection();
+
+process.on('SIGINT', () => {
+  unexportDisplay();
+  console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
+  process.exit(0);
+});
+

@@ -70,7 +70,7 @@ export function mainInterface(conn: SoundcraftUI) {
     } else if (mode === "mutesA" || mode === "mutesB") {
       subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
         LED.writeSync(state);
-        console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
+        //console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
       });
     } else {
       // Retain the original behavior for other modes
@@ -114,12 +114,14 @@ export function mainInterface(conn: SoundcraftUI) {
         // Turn on the LED
         leds[buttonNumber - 1].writeSync(LED_ON);
         if (audio) {
+          console.log('Vol to 0')
+          exec('./alsamixer-fader/fade.sh 0 0.001');
           audio.kill(); // Stop audio playback if the button is pressed again
           leds[buttonNumber - 1].writeSync(LED_OFF);
           audio = null;
         } else {
           console.log('trying to play');
-          const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
+          const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
 
           audio = exec(soundCommand, (err, stdout, stderr) => {
             if (err) {
@@ -277,8 +279,12 @@ export function mainInterface(conn: SoundcraftUI) {
     });
   }
 
-  process.on('SIGINT', unexportOnClose);
-
+process.on('SIGINT', () => {
+  unexportOnClose();
+  console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
+  process.exit(0);
+});
+  
 
 } //end of mainInterface
 
