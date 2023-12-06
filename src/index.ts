@@ -20,7 +20,8 @@ board.on('ready', function() {
 
   var display = new AlphaNum4(board, opts);
   display.clearDisplay();
-  display.writeText("Ui24");
+  display.setBrightness(80)
+  display.writeText("ACAB");
   setTimeout(() => {
     display.clearDisplay();
     console.log("Delayed for 10 second.");
