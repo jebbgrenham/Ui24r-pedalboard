@@ -3,7 +3,7 @@ import { interval, Subscription, Subject } from 'rxjs';
 import * as os from 'os';
 import * as ui24rInterface from './ui24rInterface';
 
-
+/*
 var five = require('johnny-five');
 var Raspi = require("raspi-io").RaspiIO;
 var board = new five.Board({
@@ -12,7 +12,7 @@ var board = new five.Board({
 var AlphaNum4 = require('node-led').AlphaNum4;
 
 board.on('ready', function() {
-  console.log('Connected to Arduino, ready.');
+  console.log('Connected to raspi, ready.');
 
   var opts = {
     address: 0x70
@@ -21,15 +21,15 @@ board.on('ready', function() {
   var display = new AlphaNum4(board, opts);
   display.clearDisplay();
   display.setBrightness(80)
-  display.writeText("ACAB");
-  setTimeout(() => {
-    display.clearDisplay();
-    console.log("Delayed for 10 second.");
-  }, 10000);
+  display.writeText("MMMM");
+//  setTimeout(() => {
+//    display.clearDisplay();
+//    console.log("Delayed for 10 second.");
+//  }, 10000);
 
 });
 
-
+*/
 
 const ping = require('ping');
 
