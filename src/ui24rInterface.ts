@@ -204,9 +204,9 @@ export function mainInterface(conn: SoundcraftUI) {
   }
 
   // Initialize mode button and set up mode change logic
-  const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+  const shutdownButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
 
-  let isModeButtonPressed = false;
+  let isShutdownButtonPressed = false;
   let shutdownTimeout: NodeJS.Timeout | null = null;
 
   function handleShutdown() {
@@ -214,24 +214,24 @@ export function mainInterface(conn: SoundcraftUI) {
     executeShutdownCommand();
   }
 
-  modeButton.watch((err: any, value: any) => {
+  shutdownButton.watch((err: any, value: any) => {
     if (err) {
       throw err;
     }
 
     if (value === 0) {
-      isModeButtonPressed = true;
+      isShutdownButtonPressed = true;
       shutdownTimeout = setTimeout(() => {
-        if (isModeButtonPressed) {
+        if (isShutdownButtonPressed) {
           handleShutdown();
         }
         shutdownTimeout = null;
       }, 3000);
     } else if (value === 1) {
-      if (isModeButtonPressed) {
-        handleModeChange();
+      if (isShutdownButtonPressed) {
+//        handleModeChange();
       }
-      isModeButtonPressed = false;
+      isShutdownButtonPressed = false;
 
       if (shutdownTimeout) {
         clearTimeout(shutdownTimeout);
