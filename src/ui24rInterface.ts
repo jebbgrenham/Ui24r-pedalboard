@@ -41,7 +41,8 @@ export function mainInterface(conn: SoundcraftUI) {
   const subscriptionMap: { [index: number | string]: Subscription } = {};
 
   // Initial LED subscription and mode setup
-  handleModeChange();
+   let isButtonListenerPaused = false;
+   handleModeChange();
 
   function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
     let index: number | string = LEDindex;
@@ -91,50 +92,54 @@ export function mainInterface(conn: SoundcraftUI) {
   }
 
   function handleMuteEvent(buttonNumber: number) {
-    return (err: string, value: string) => {
-      if (!err) {
-        const group = ledIndexMap[mode][buttonNumber - 1];
-        console.log(mode);
-        console.log(group);
-        if (typeof group === 'number' || typeof group === 'string') {
-          conn.muteGroup(group as any).toggle();
-        }
-        console.log('Pushed Button:', group);
+    if (!isButtonListenerPaused) {    
+        return (err: string, value: string) => {
+          if (!err) {
+            const group = ledIndexMap[mode][buttonNumber - 1];
+            console.log(mode);
+            console.log(group);
+            if (typeof group === 'number' || typeof group === 'string') {
+              conn.muteGroup(group as any).toggle();
+            }
+            console.log('Pushed Button:', group);
+          }
+        };
       }
-    };
   }
 
 
 
   function handleSamplerEvent(buttonNumber: number) {
-    let audio: any = null;
+      if (!isButtonListenerPaused) {
+        let audio: any = null;
 
-    return (err: ExecException | null, value: string | null) => {
-      if (!err) {
-        // Turn on the LED
-        leds[buttonNumber - 1].writeSync(LED_ON);
-        if (audio) {
-          console.log('Vol to 0')
-          exec('./alsamixer-fader/fade.sh 0 0.001');
-          audio.kill(); // Stop audio playback if the button is pressed again
-          leds[buttonNumber - 1].writeSync(LED_OFF);
-          audio = null;
-        } else {
-          console.log('trying to play');
-          const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
-
-          audio = exec(soundCommand, (err, stdout, stderr) => {
-            if (err) {
-              console.log(`Could not play sound/sound stopped: ${err}`);
-            } else {
-              console.log('Played sample', buttonNumber);
+        return (err: ExecException | null, value: string | null) => {
+          if (!err) {
+            // Turn on the LED
+            leds[buttonNumber - 1].writeSync(LED_ON);
+            if (audio) {
+              console.log('Vol to 0')
+              exec('./alsamixer-fader/fade.sh 0 0.001');
+              audio.kill(); // Stop audio playback if the button is pressed again
+              leds[buttonNumber - 1].writeSync(LED_OFF);
               audio = null;
+            } else {
+              console.log('trying to play');
+              const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+
+              audio = exec(soundCommand, (err, stdout, stderr) => {
+                if (err) {
+                  console.log(`Could not play sound/sound stopped: ${err}`);
+                } else {
+                  console.log('Played sample', buttonNumber);
+                  audio = null;
+                }
+                leds[buttonNumber - 1].writeSync(LED_OFF);
+              });
             }
-            leds[buttonNumber - 1].writeSync(LED_OFF);
-          });
-        }
+          }
+        };
       }
-    };
   }
 
   function handlePlayerEvent(buttonNumber: number) {
@@ -203,9 +208,21 @@ export function mainInterface(conn: SoundcraftUI) {
     }
   }
 
-  // Initialize mode button and set up mode change logic
-  const shutdownButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
 
+  let simultaneousPressTimeout: NodeJS.Timeout | null = null;
+
+  function handleSimultaneousPress() {
+    if (simultaneousPressTimeout) {
+      clearTimeout(simultaneousPressTimeout);
+      simultaneousPressTimeout = null;
+
+      // Both buttons 1 and 2 were pressed simultaneously
+      handleModeChange();
+    }
+  }
+
+  // Initialize shutdown button 
+  const shutdownButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
   let isShutdownButtonPressed = false;
   let shutdownTimeout: NodeJS.Timeout | null = null;
 
@@ -215,30 +232,50 @@ export function mainInterface(conn: SoundcraftUI) {
   }
 
   shutdownButton.watch((err: any, value: any) => {
-    if (err) {
-      throw err;
-    }
+      if (err) {
+        throw err;
+      }
 
-    if (value === 0) {
-      isShutdownButtonPressed = true;
-      shutdownTimeout = setTimeout(() => {
+      if (value === 0) {
+        isShutdownButtonPressed = true;
+        shutdownTimeout = setTimeout(() => {
+          if (isShutdownButtonPressed) {
+            handleShutdown();
+          }
+          shutdownTimeout = null;
+        }, 3000);
+
+        // Check for simultaneous press of buttons 1 and 2
+        simultaneousPressTimeout = setTimeout(() => {
+          handleSimultaneousPress();
+        }, 200);
+      } else if (value === 1) {
         if (isShutdownButtonPressed) {
-          handleShutdown();
+          // handleModeChange();
         }
-        shutdownTimeout = null;
-      }, 3000);
-    } else if (value === 1) {
-      if (isShutdownButtonPressed) {
-//        handleModeChange();
-      }
-      isShutdownButtonPressed = false;
+        isShutdownButtonPressed = false;
 
-      if (shutdownTimeout) {
-        clearTimeout(shutdownTimeout);
-        shutdownTimeout = null;
+        if (shutdownTimeout) {
+          clearTimeout(shutdownTimeout);
+          shutdownTimeout = null;
+        }
+
+        // Clear the simultaneous press timeout
+        if (simultaneousPressTimeout) {
+          clearTimeout(simultaneousPressTimeout);
+          simultaneousPressTimeout = null;
+        }
       }
-    }
   });
+  
+  // Add a function to pause and resume button listeners
+  function pauseButtonListeners() {
+    isButtonListenerPaused = true;
+  }
+
+  function resumeButtonListeners() {
+    isButtonListenerPaused = false;
+  }
 
   function updateSubscriptions() {
     unsubscribeLEDs();
