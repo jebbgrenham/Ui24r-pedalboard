@@ -5,7 +5,8 @@ const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const rxjs_1 = require("rxjs");
 const operators_1 = require("rxjs/operators");
 const child_process_1 = require("child_process");
-function mainInterface(conn) {
+function mainInterface(conn, display) {
+    setTimeout(() => display.writeString('HELO'), 4000);
     console.log('main iface has been called');
     // Constants
     const Gpio = require('onoff').Gpio;
@@ -17,8 +18,10 @@ function mainInterface(conn) {
     const pushButtonPins = [6, 7, 8];
     // Define modes
     const modes = ["mutesA", "mutesB", "player", "sampler"];
+    const modesDisp = ["MUT.A", "MUT.B", "PLAY.", "SAMP."];
     let modeIndex = 0; //so that on initial handleMode we get mutes A
     let mode = "mutesA"; // You will regret changing this...
+    setTimeout(() => display.writeString(modesDisp[modeIndex]), 6000);
     let longPressTimeout = null;
     console.log(mode);
     const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
@@ -27,6 +30,7 @@ function mainInterface(conn) {
         stopButtonListeners();
         modeIndex = (modeIndex + 1) % modes.length;
         mode = modes[modeIndex];
+        display.writeString(modesDisp[modeIndex]);
         console.log('Mode now', mode);
         updateSubscriptions();
         setupButtons(mode);
@@ -39,7 +43,7 @@ function mainInterface(conn) {
                 longPressTimeout = setTimeout(() => {
                     modeButtonThreshold = true;
                     console.log('mode threshold met');
-                }, 2000);
+                }, 1500);
             }
             else if (value === 1) {
                 // Button released, clear the long press timeout

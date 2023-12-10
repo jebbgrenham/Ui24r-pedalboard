@@ -35,33 +35,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const os = __importStar(require("os"));
 const ui24rInterface = __importStar(require("./ui24rInterface"));
-/*
-var five = require('johnny-five');
-var Raspi = require("raspi-io").RaspiIO;
-var board = new five.Board({
-  io: new Raspi()
-});
-var AlphaNum4 = require('node-led').AlphaNum4;
-
-board.on('ready', function() {
-  console.log('Connected to raspi, ready.');
-
-  var opts = {
-    address: 0x70
-  };
-
-  var display = new AlphaNum4(board, opts);
-  display.clearDisplay();
-  display.setBrightness(80)
-  display.writeText("MMMM");
-//  setTimeout(() => {
-//    display.clearDisplay();
-//    console.log("Delayed for 10 second.");
-//  }, 10000);
-
-});
-
-*/
+//Prove we booted
+var FourteenSegment = require('ht16k33-fourteensegment-display');
+var display = new FourteenSegment(0x70, 1);
+display.writeString("ACAB");
 const ping = require('ping');
 let conn;
 // Function to get the subnet based on the device's IP on wlan0
@@ -126,6 +103,18 @@ function attemptConnection(ip) {
                 if (status.type === 'OPEN') {
                     // Connection successful, complete the Promise
                     console.log('Ah excellent! Here is a mixer I can talk to');
+                    //show IP to user
+                    const [ip1, ip2, ip3, ip4] = ip.split('.');
+                    const showWithDelay = (ip, delay) => {
+                        setTimeout(() => {
+                            display.writeString(ip);
+                        }, delay);
+                    };
+                    // Show each digit
+                    showWithDelay(ip1 + '.', 0);
+                    showWithDelay(ip2 + '.', 1000);
+                    showWithDelay(ip3 + '.', 2000);
+                    showWithDelay(ip4, 3000);
                     statusSubscription.unsubscribe();
                     resolve(ip);
                 }
@@ -164,8 +153,7 @@ function initializeSoundcraftUIConnection() {
         try {
             yield conn.connect();
             console.log('Connected to SoundcraftUI at:', discoveredIP);
-            console.log('About to call main iface');
-            ui24rInterface.mainInterface(conn);
+            ui24rInterface.mainInterface(conn, display);
             return true;
         }
         catch (error) {
