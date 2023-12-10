@@ -32,7 +32,6 @@ export function mainInterface(conn: SoundcraftUI) {
     mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
-    console.log('set up buttons')
     setupButtons(mode);
   } 
 
@@ -41,7 +40,6 @@ export function mainInterface(conn: SoundcraftUI) {
     if (!err) {
       if (value === 0) {
         // Button pressed, start the long press timeout
-        console.log('start timeout')
         longPressTimeout = setTimeout(() => {
           modeButtonThreshold = true;
           console.log('mode threshold met');
@@ -49,7 +47,6 @@ export function mainInterface(conn: SoundcraftUI) {
       } else if (value === 1) {
         // Button released, clear the long press timeout
         if (longPressTimeout) {
-          console.log('clearing the timeout')
           clearTimeout(longPressTimeout);
           longPressTimeout = null;
         } 
@@ -65,18 +62,12 @@ export function mainInterface(conn: SoundcraftUI) {
       }
     }
   });
-    
-  // Define LED and button pins
-  const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
-  
+ 
   const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
-
-  function buildButtons() {
-    const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
-  }
   
   // LED and button arrays
-  const [LED1, LED2, LED3, LED4] = LED;
+  // Define LED and button pins
+  const [LED1, LED2, LED3, LED4] = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
   const [pushButton2, pushButton3, pushButton4] = pushButtons;
   const buttons = [pushButton2, pushButton3, pushButton4];
   const leds = [LED1, LED2, LED3, LED4];
@@ -89,10 +80,7 @@ export function mainInterface(conn: SoundcraftUI) {
 
   // Create a map to track subscriptions
   const subscriptionMap: { [index: number | string]: Subscription } = {};
-
-
-  let isButtonListenerPaused = false;
-   
+  
   function setupButtons(mode: string) {
     if (mode === "sampler") {
           buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 2)));
@@ -132,11 +120,8 @@ export function mainInterface(conn: SoundcraftUI) {
     } else if (mode === "mutesA" || mode === "mutesB") {
       subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
         LED.writeSync(state);
-        //console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
       });
-    } else {
-      // Retain the original behavior for other modes
-    }
+    } 
   }
 
   function unsubscribeLEDs() {
@@ -154,8 +139,6 @@ export function mainInterface(conn: SoundcraftUI) {
 
   function muter (buttonNumber){
     const group = ledIndexMap[mode][buttonNumber - 1];
-//  console.log(mode);
-    console.log("Group is:", group);
     if (typeof group === 'number' || typeof group === 'string') {
       conn.muteGroup(group as any).toggle();
     }
@@ -163,13 +146,11 @@ export function mainInterface(conn: SoundcraftUI) {
   }
 
   function handleMuteEvent(buttonNumber: number) {
-    if (!isButtonListenerPaused) {    
         return (err: string, value: string) => {
           if (!err) {
             muter(buttonNumber);
           }
         };
-      }
   }
 
   function sampler(buttonNumber) {
@@ -177,7 +158,6 @@ export function mainInterface(conn: SoundcraftUI) {
     let audio: any = null;
     leds[buttonNumber - 1].writeSync(LED_ON);
     if (audio) {
-      console.log('Vol to 0')
       exec('./alsamixer-fader/fade.sh 0 0.001');
       audio.kill(); // Stop audio playback if the button is pressed again
       leds[buttonNumber - 1].writeSync(LED_OFF);
@@ -198,15 +178,11 @@ export function mainInterface(conn: SoundcraftUI) {
   }
 
   function handleSamplerEvent(buttonNumber: number) {
-      if (!isButtonListenerPaused) {
-        let audio: any = null;
-
         return (err: ExecException | null, value: string | null) => {
           if (!err) {
             sampler(buttonNumber);
           }
         };
-      }
   }
 
   function player(buttonNumber) {
