@@ -21,6 +21,7 @@
   "homepage": "https://github.com/jebbgrenham/Ui24r-pedalboard#readme",
   "dependencies": {
     "@types/johnny-five": "^2.1.9",
+    "@types/pigpio": "^3.1.0",
     "aplay": "^1.2.0",
     "johnny-five": "^2.1.0",
     "node-led": "^0.3.1",

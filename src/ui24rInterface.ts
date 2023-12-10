@@ -13,7 +13,7 @@ export function mainInterface(conn: SoundcraftUI) {
   const LED_ON = 1;
   const DEBOUNCE_TIMEOUT = 75;
   const ledPinNumbers = [9, 10, 11, 12];
-  const pushButtonPins = [5, 6, 7, 8];
+  const pushButtonPins = [6, 7, 8];
 
   // Define modes
   const modes = ["mutesA", "mutesB", "player", "sampler"];
@@ -45,7 +45,6 @@ export function mainInterface(conn: SoundcraftUI) {
         longPressTimeout = setTimeout(() => {
           modeButtonThreshold = true;
           console.log('mode threshold met');
-          //stopButtonListeners();
         }, 2000);
       } else if (value === 1) {
         // Button released, clear the long press timeout
@@ -56,7 +55,12 @@ export function mainInterface(conn: SoundcraftUI) {
         } 
         if (modeButtonThreshold === true) {
            handleModeChange();
+        } else {
+          if (mode === "sampler") { sampler(1); }
+          else if (mode === "player") { player(1); }
+          else { muter(1); }
         }
+        
         modeButtonThreshold = false;
       }
     }
@@ -64,12 +68,17 @@ export function mainInterface(conn: SoundcraftUI) {
     
   // Define LED and button pins
   const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
+  
   const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
 
+  function buildButtons() {
+    const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
+  }
+  
   // LED and button arrays
   const [LED1, LED2, LED3, LED4] = LED;
-  const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
-  const buttons = [pushButton1, pushButton2, pushButton3, pushButton4];
+  const [pushButton2, pushButton3, pushButton4] = pushButtons;
+  const buttons = [pushButton2, pushButton3, pushButton4];
   const leds = [LED1, LED2, LED3, LED4];
 
   // Define the LED index mapping
@@ -86,12 +95,11 @@ export function mainInterface(conn: SoundcraftUI) {
    
   function setupButtons(mode: string) {
     if (mode === "sampler") {
-          buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+          buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 2)));
         } else if (mode === "player") {
-          buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+          buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 2)));
         } else {
-          buttons.forEach((button, index) =>
-          button.watch(handleMuteEvent(index + 1)));
+          buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 2)));
         }
   }
   setupButtons(mode)
@@ -144,23 +152,50 @@ export function mainInterface(conn: SoundcraftUI) {
     }
   }
 
+  function muter (buttonNumber){
+    const group = ledIndexMap[mode][buttonNumber - 1];
+//  console.log(mode);
+    console.log("Group is:", group);
+    if (typeof group === 'number' || typeof group === 'string') {
+      conn.muteGroup(group as any).toggle();
+    }
+    console.log('Pushed Button:', group);
+  }
+
   function handleMuteEvent(buttonNumber: number) {
     if (!isButtonListenerPaused) {    
         return (err: string, value: string) => {
           if (!err) {
-            const group = ledIndexMap[mode][buttonNumber - 1];
-//            console.log(mode);
-//            console.log(group);
-            if (typeof group === 'number' || typeof group === 'string') {
-              conn.muteGroup(group as any).toggle();
-            }
-            console.log('Pushed Button:', group);
+            muter(buttonNumber);
           }
         };
       }
   }
 
-
+  function sampler(buttonNumber) {
+    // Turn on the LED
+    let audio: any = null;
+    leds[buttonNumber - 1].writeSync(LED_ON);
+    if (audio) {
+      console.log('Vol to 0')
+      exec('./alsamixer-fader/fade.sh 0 0.001');
+      audio.kill(); // Stop audio playback if the button is pressed again
+      leds[buttonNumber - 1].writeSync(LED_OFF);
+      audio = null;
+    } else {
+      console.log('trying to play');
+      const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+      audio = exec(soundCommand, (err, stdout, stderr) => {
+        if (err) {
+          console.log(`Could not play sound/sound stopped: ${err}`);
+        } else {
+          console.log('Played sample', buttonNumber);
+          audio = null;
+        }
+        leds[buttonNumber - 1].writeSync(LED_OFF);
+      });
+    } 
+  }
 
   function handleSamplerEvent(buttonNumber: number) {
       if (!isButtonListenerPaused) {
@@ -168,55 +203,37 @@ export function mainInterface(conn: SoundcraftUI) {
 
         return (err: ExecException | null, value: string | null) => {
           if (!err) {
-            // Turn on the LED
-            leds[buttonNumber - 1].writeSync(LED_ON);
-            if (audio) {
-              console.log('Vol to 0')
-              exec('./alsamixer-fader/fade.sh 0 0.001');
-              audio.kill(); // Stop audio playback if the button is pressed again
-              leds[buttonNumber - 1].writeSync(LED_OFF);
-              audio = null;
-            } else {
-              console.log('trying to play');
-              const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
-
-              audio = exec(soundCommand, (err, stdout, stderr) => {
-                if (err) {
-                  console.log(`Could not play sound/sound stopped: ${err}`);
-                } else {
-                  console.log('Played sample', buttonNumber);
-                  audio = null;
-                }
-                leds[buttonNumber - 1].writeSync(LED_OFF);
-              });
-            }
+            sampler(buttonNumber);
           }
         };
       }
   }
 
-  function handlePlayerEvent(buttonNumber: number) {
-    if (!isButtonListenerPaused) {
-      return (err: string, value: string) => {
-        if (!err) {
-          switch (buttonNumber) {
-            case 1:
-              handlePlayerButton1();
-              break;
-            case 2:
-              conn.player.prev();
-              break;
-            case 3:
-              conn.player.next();
-              break;
-            case 4:
-              conn.recorderMultiTrack.recordToggle();
-              break;
-          }
-        }
-      };
-    }
+  function player(buttonNumber) {
+      switch (buttonNumber) {
+        case 1:
+          handlePlayerButton1();
+          break;
+        case 2:
+          conn.player.prev();
+          break;
+        case 3:
+          conn.player.next();
+          break;
+        case 4:
+          conn.recorderMultiTrack.recordToggle();
+          break;
+      }
   }
+
+  function handlePlayerEvent(buttonNumber: number) {
+    return (err: string, value: string) => {
+      if (!err) {
+        player(buttonNumber);
+      }
+    };
+  }
+  
   function handlePlayerButton1() {
     let destroy$ = new Subject<void>();
 
@@ -296,12 +313,13 @@ export function mainInterface(conn: SoundcraftUI) {
   readline.emitKeypressEvents(process.stdin);
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
 
-  function unexportOnClose() {
+  function unexportLEDs() {
     leds.forEach((led) => {
       led.writeSync(LED_OFF);
       led.unexport();
     });
-
+  }
+  function unexportButtons() {
     pushButtons.forEach((button) => {
       button.unexport();
     });
@@ -317,11 +335,12 @@ export function mainInterface(conn: SoundcraftUI) {
     });
   }
 
-process.on('SIGINT', () => {
-  unexportOnClose();
-  console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
-  process.exit(0);
-});
+  process.on('SIGINT', () => {
+    unexportLEDs();
+    unexportButtons();
+    console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
+    process.exit(0);
+  });
   
 
 } //end of mainInterface

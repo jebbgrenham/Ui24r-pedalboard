@@ -35,6 +35,33 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const os = __importStar(require("os"));
 const ui24rInterface = __importStar(require("./ui24rInterface"));
+/*
+var five = require('johnny-five');
+var Raspi = require("raspi-io").RaspiIO;
+var board = new five.Board({
+  io: new Raspi()
+});
+var AlphaNum4 = require('node-led').AlphaNum4;
+
+board.on('ready', function() {
+  console.log('Connected to raspi, ready.');
+
+  var opts = {
+    address: 0x70
+  };
+
+  var display = new AlphaNum4(board, opts);
+  display.clearDisplay();
+  display.setBrightness(80)
+  display.writeText("MMMM");
+//  setTimeout(() => {
+//    display.clearDisplay();
+//    console.log("Delayed for 10 second.");
+//  }, 10000);
+
+});
+
+*/
 const ping = require('ping');
 let conn;
 // Function to get the subnet based on the device's IP on wlan0
@@ -147,4 +174,12 @@ function initializeSoundcraftUIConnection() {
         }
     });
 }
+function unexportDisplay() {
+    console.log('Closing down');
+}
 initializeSoundcraftUIConnection();
+process.on('SIGINT', () => {
+    unexportDisplay();
+    console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
+    process.exit(0);
+});

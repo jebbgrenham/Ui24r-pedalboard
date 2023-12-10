@@ -14,19 +14,70 @@ function mainInterface(conn) {
     const LED_ON = 1;
     const DEBOUNCE_TIMEOUT = 75;
     const ledPinNumbers = [9, 10, 11, 12];
-    const pushButtonPins = [5, 6, 7, 8];
+    const pushButtonPins = [6, 7, 8];
     // Define modes
     const modes = ["mutesA", "mutesB", "player", "sampler"];
-    let modeIndex = 3; //so that on initial handleMode we get mutes A
-    let mode = "sampler"; // You will regret changing this...
+    let modeIndex = 0; //so that on initial handleMode we get mutes A
+    let mode = "mutesA"; // You will regret changing this...
+    let longPressTimeout = null;
     console.log(mode);
+    const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+    let modeButtonThreshold = false;
+    function handleModeChange() {
+        stopButtonListeners();
+        modeIndex = (modeIndex + 1) % modes.length;
+        mode = modes[modeIndex];
+        console.log('Mode now', mode);
+        updateSubscriptions();
+        console.log('set up buttons');
+        setupButtons(mode);
+    }
+    // Watch for both rising and falling edges of the modeButton
+    modeButton.watch((err, value) => {
+        if (!err) {
+            if (value === 0) {
+                // Button pressed, start the long press timeout
+                console.log('start timeout');
+                longPressTimeout = setTimeout(() => {
+                    modeButtonThreshold = true;
+                    console.log('mode threshold met');
+                }, 2000);
+            }
+            else if (value === 1) {
+                // Button released, clear the long press timeout
+                if (longPressTimeout) {
+                    console.log('clearing the timeout');
+                    clearTimeout(longPressTimeout);
+                    longPressTimeout = null;
+                }
+                if (modeButtonThreshold === true) {
+                    handleModeChange();
+                }
+                else {
+                    if (mode === "sampler") {
+                        sampler(1);
+                    }
+                    else if (mode === "player") {
+                        player(1);
+                    }
+                    else {
+                        muter(1);
+                    }
+                }
+                modeButtonThreshold = false;
+            }
+        }
+    });
     // Define LED and button pins
     const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
     const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
+    function buildButtons() {
+        const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
+    }
     // LED and button arrays
     const [LED1, LED2, LED3, LED4] = LED;
-    const [pushButton1, pushButton2, pushButton3, pushButton4] = pushButtons;
-    const buttons = [pushButton1, pushButton2, pushButton3, pushButton4];
+    const [pushButton2, pushButton3, pushButton4] = pushButtons;
+    const buttons = [pushButton2, pushButton3, pushButton4];
     const leds = [LED1, LED2, LED3, LED4];
     // Define the LED index mapping
     const ledIndexMap = {
@@ -35,8 +86,20 @@ function mainInterface(conn) {
     };
     // Create a map to track subscriptions
     const subscriptionMap = {};
+    let isButtonListenerPaused = false;
+    function setupButtons(mode) {
+        if (mode === "sampler") {
+            buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 2)));
+        }
+        else if (mode === "player") {
+            buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 2)));
+        }
+        else {
+            buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 2)));
+        }
+    }
+    setupButtons(mode);
     // Initial LED subscription and mode setup
-    handleModeChange();
     function subscribeLED(LEDindex, LED) {
         let index = LEDindex;
         if (subscriptionMap[index]) {
@@ -86,65 +149,80 @@ function mainInterface(conn) {
             }
         }
     }
-    function handleMuteEvent(buttonNumber) {
-        return (err, value) => {
-            if (!err) {
-                const group = ledIndexMap[mode][buttonNumber - 1];
-                console.log(mode);
-                console.log(group);
-                if (typeof group === 'number' || typeof group === 'string') {
-                    conn.muteGroup(group).toggle();
-                }
-                console.log('Pushed Button:', group);
-            }
-        };
+    function muter(buttonNumber) {
+        const group = ledIndexMap[mode][buttonNumber - 1];
+        //  console.log(mode);
+        console.log("Group is:", group);
+        if (typeof group === 'number' || typeof group === 'string') {
+            conn.muteGroup(group).toggle();
+        }
+        console.log('Pushed Button:', group);
     }
-    function handleSamplerEvent(buttonNumber) {
+    function handleMuteEvent(buttonNumber) {
+        if (!isButtonListenerPaused) {
+            return (err, value) => {
+                if (!err) {
+                    muter(buttonNumber);
+                }
+            };
+        }
+    }
+    function sampler(buttonNumber) {
+        // Turn on the LED
         let audio = null;
-        return (err, value) => {
-            if (!err) {
-                // Turn on the LED
-                leds[buttonNumber - 1].writeSync(LED_ON);
-                if (audio) {
-                    (0, child_process_1.exec)('./alsamixer-fader/fade.sh 0 0.001');
-                    audio.kill(); // Stop audio playback if the button is pressed again
-                    leds[buttonNumber - 1].writeSync(LED_OFF);
-                    audio = null;
+        leds[buttonNumber - 1].writeSync(LED_ON);
+        if (audio) {
+            console.log('Vol to 0');
+            (0, child_process_1.exec)('./alsamixer-fader/fade.sh 0 0.001');
+            audio.kill(); // Stop audio playback if the button is pressed again
+            leds[buttonNumber - 1].writeSync(LED_OFF);
+            audio = null;
+        }
+        else {
+            console.log('trying to play');
+            const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+            audio = (0, child_process_1.exec)(soundCommand, (err, stdout, stderr) => {
+                if (err) {
+                    console.log(`Could not play sound/sound stopped: ${err}`);
                 }
                 else {
-                    console.log('trying to play');
-                    const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
-                    audio = (0, child_process_1.exec)(soundCommand, (err, stdout, stderr) => {
-                        if (err) {
-                            console.log(`Could not play sound/sound stopped: ${err}`);
-                        }
-                        else {
-                            console.log('Played sample', buttonNumber);
-                            audio = null;
-                        }
-                        leds[buttonNumber - 1].writeSync(LED_OFF);
-                    });
+                    console.log('Played sample', buttonNumber);
+                    audio = null;
                 }
-            }
-        };
+                leds[buttonNumber - 1].writeSync(LED_OFF);
+            });
+        }
+    }
+    function handleSamplerEvent(buttonNumber) {
+        if (!isButtonListenerPaused) {
+            let audio = null;
+            return (err, value) => {
+                if (!err) {
+                    sampler(buttonNumber);
+                }
+            };
+        }
+    }
+    function player(buttonNumber) {
+        switch (buttonNumber) {
+            case 1:
+                handlePlayerButton1();
+                break;
+            case 2:
+                conn.player.prev();
+                break;
+            case 3:
+                conn.player.next();
+                break;
+            case 4:
+                conn.recorderMultiTrack.recordToggle();
+                break;
+        }
     }
     function handlePlayerEvent(buttonNumber) {
         return (err, value) => {
             if (!err) {
-                switch (buttonNumber) {
-                    case 1:
-                        handlePlayerButton1();
-                        break;
-                    case 2:
-                        conn.player.prev();
-                        break;
-                    case 3:
-                        conn.player.next();
-                        break;
-                    case 4:
-                        conn.recorderMultiTrack.recordToggle();
-                        break;
-                }
+                player(buttonNumber);
             }
         };
     }
@@ -174,48 +252,29 @@ function mainInterface(conn) {
     function stopButtonListeners() {
         buttons.forEach((button) => button.unwatchAll());
     }
-    function handleModeChange() {
-        stopButtonListeners();
-        modeIndex = (modeIndex + 1) % modes.length;
-        mode = modes[modeIndex];
-        console.log('Mode now', mode);
-        updateSubscriptions();
-        if (mode === "sampler") {
-            buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-        }
-        else if (mode === "player") {
-            buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-        }
-        else {
-            buttons.forEach((button, index) => button.watch(handleMuteEvent(index + 1)));
-        }
-    }
-    // Initialize mode button and set up mode change logic
-    const modeButton = new Gpio(4, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
-    let isModeButtonPressed = false;
+    // Initialize shutdown button 
+    const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+    let isShutdownButtonPressed = false;
     let shutdownTimeout = null;
     function handleShutdown() {
         console.log('Shutting down...');
         executeShutdownCommand();
     }
-    modeButton.watch((err, value) => {
+    shutdownButton.watch((err, value) => {
         if (err) {
             throw err;
         }
         if (value === 0) {
-            isModeButtonPressed = true;
+            isShutdownButtonPressed = true;
             shutdownTimeout = setTimeout(() => {
-                if (isModeButtonPressed) {
+                if (isShutdownButtonPressed) {
                     handleShutdown();
                 }
                 shutdownTimeout = null;
             }, 3000);
         }
         else if (value === 1) {
-            if (isModeButtonPressed) {
-                handleModeChange();
-            }
-            isModeButtonPressed = false;
+            isShutdownButtonPressed = false;
             if (shutdownTimeout) {
                 clearTimeout(shutdownTimeout);
                 shutdownTimeout = null;
@@ -235,14 +294,17 @@ function mainInterface(conn) {
             subscribeLED(4, LED4);
         }
     }
+    updateSubscriptions();
     readline.emitKeypressEvents(process.stdin);
     if (process.stdin.isTTY)
         process.stdin.setRawMode(true);
-    function unexportOnClose() {
+    function unexportLEDs() {
         leds.forEach((led) => {
             led.writeSync(LED_OFF);
             led.unexport();
         });
+    }
+    function unexportButtons() {
         pushButtons.forEach((button) => {
             button.unexport();
         });
@@ -257,6 +319,11 @@ function mainInterface(conn) {
             }
         });
     }
-    process.on('SIGINT', unexportOnClose);
+    process.on('SIGINT', () => {
+        unexportLEDs();
+        unexportButtons();
+        console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
+        process.exit(0);
+    });
 } //end of mainInterface
 exports.mainInterface = mainInterface;
