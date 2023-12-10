@@ -22,9 +22,27 @@ export function mainInterface(conn: SoundcraftUI) {
 
   let longPressTimeout: NodeJS.Timeout | null = null;
 
-console.log(mode);
+  console.log(mode);
 
   const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+  let modeButtonReleased = false;
+ 
+  function handleModeChange() {
+    stopButtonListeners();
+    modeIndex = (modeIndex + 1) % modes.length;
+    mode = modes[modeIndex];
+    console.log('Mode now', mode);
+    updateSubscriptions();
+
+    if (modeButtonReleased) {
+      console.log('mode has been released. Now wait 200 and set up buttons')
+      setTimeout(() => {
+        setupButtons(mode);
+      }, 200);
+      modeButtonReleased = false; // Reset the flag
+    }
+  } 
+
   // Listen for a long press on button 4 (GPIO 5)
   function handleModeChangeLongPress() {
     console.log('CALLED handleModeChangeLongPress')
@@ -57,6 +75,7 @@ console.log(mode);
             clearTimeout(longPressTimeout);
             longPressTimeout = null;
          } 
+        modeButtonReleased = true;
         }
       }
     });
@@ -150,8 +169,8 @@ console.log(mode);
         return (err: string, value: string) => {
           if (!err) {
             const group = ledIndexMap[mode][buttonNumber - 1];
-            console.log(mode);
-            console.log(group);
+//            console.log(mode);
+//            console.log(group);
             if (typeof group === 'number' || typeof group === 'string') {
               conn.muteGroup(group as any).toggle();
             }
@@ -197,26 +216,27 @@ console.log(mode);
   }
 
   function handlePlayerEvent(buttonNumber: number) {
-    return (err: string, value: string) => {
-      if (!err) {
-        switch (buttonNumber) {
-          case 1:
-            handlePlayerButton1();
-            break;
-          case 2:
-            conn.player.prev();
-            break;
-          case 3:
-            conn.player.next();
-            break;
-          case 4:
-            conn.recorderMultiTrack.recordToggle();
-            break;
+    if (!isButtonListenerPaused) {
+      return (err: string, value: string) => {
+        if (!err) {
+          switch (buttonNumber) {
+            case 1:
+              handlePlayerButton1();
+              break;
+            case 2:
+              conn.player.prev();
+              break;
+            case 3:
+              conn.player.next();
+              break;
+            case 4:
+              conn.recorderMultiTrack.recordToggle();
+              break;
+          }
         }
-      }
-    };
+      };
+    }
   }
-
   function handlePlayerButton1() {
     let destroy$ = new Subject<void>();
 
@@ -244,26 +264,6 @@ console.log(mode);
   function stopButtonListeners() {
     buttons.forEach((button) => button.unwatchAll());
   }
-
-  function handleModeChange() {
-    stopButtonListeners();
-    modeIndex = (modeIndex + 1) % modes.length;
-    mode = modes[modeIndex];
-    console.log('Mode now', mode);
-    updateSubscriptions();
-
-    modeButton.watch((err: any, value: any) => {
-      if (!err && value === 1) {
-        console.log('released mode')
-        setupButtons(mode)
-        modeButton.unwatch();
-        watchModeButton();
-      }
-    });
-  }
-
-
-
 
   // Initialize shutdown button 
   const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
