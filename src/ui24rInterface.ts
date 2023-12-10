@@ -4,7 +4,9 @@ import { interval, Subscription, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { exec, ExecException } from 'child_process';
 
-export function mainInterface(conn: SoundcraftUI) {
+export function mainInterface(conn: SoundcraftUI,display) {
+  setTimeout(() => display.writeString('HELO'), 4000);
+
   console.log('main iface has been called')
   // Constants
   const Gpio = require('onoff').Gpio;
@@ -17,9 +19,10 @@ export function mainInterface(conn: SoundcraftUI) {
 
   // Define modes
   const modes = ["mutesA", "mutesB", "player", "sampler"];
+  const modesDisp = ["MUT.A", "MUT.B", "PLAY.", "SAMP."];
   let modeIndex = 0; //so that on initial handleMode we get mutes A
   let mode: string = "mutesA"; // You will regret changing this...
-
+  setTimeout(() => display.writeString(modesDisp[modeIndex]), 6000);
   let longPressTimeout: NodeJS.Timeout | null = null;
   console.log(mode);
 
@@ -30,6 +33,7 @@ export function mainInterface(conn: SoundcraftUI) {
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
+    display.writeString(modesDisp[modeIndex]);
     console.log('Mode now', mode);
     updateSubscriptions();
     setupButtons(mode);

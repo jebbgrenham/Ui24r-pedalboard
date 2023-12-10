@@ -3,33 +3,11 @@ import { interval, Subscription, Subject } from 'rxjs';
 import * as os from 'os';
 import * as ui24rInterface from './ui24rInterface';
 
-/*
-var five = require('johnny-five');
-var Raspi = require("raspi-io").RaspiIO;
-var board = new five.Board({
-  io: new Raspi()
-});
-var AlphaNum4 = require('node-led').AlphaNum4;
+//Prove we booted
+var FourteenSegment = require('ht16k33-fourteensegment-display');
+var display = new FourteenSegment(0x70, 1);
+display.writeString("ACAB");
 
-board.on('ready', function() {
-  console.log('Connected to raspi, ready.');
-
-  var opts = {
-    address: 0x70
-  };
-
-  var display = new AlphaNum4(board, opts);
-  display.clearDisplay();
-  display.setBrightness(80)
-  display.writeText("MMMM");
-//  setTimeout(() => {
-//    display.clearDisplay();
-//    console.log("Delayed for 10 second.");
-//  }, 10000);
-
-});
-
-*/
 
 const ping = require('ping');
 
@@ -103,6 +81,20 @@ async function attemptConnection(ip: string): Promise<string | null> {
       if (status.type === 'OPEN') {
         // Connection successful, complete the Promise
         console.log('Ah excellent! Here is a mixer I can talk to')
+        
+        //show IP to user
+        const [ip1, ip2, ip3, ip4] = ip.split('.');
+        const showWithDelay = (ip, delay) => {
+          setTimeout(() => {
+            display.writeString(ip);
+          }, delay);
+        };
+        // Show each digit
+        showWithDelay(ip1 + '.', 0);
+        showWithDelay(ip2 + '.', 1000);
+        showWithDelay(ip3 + '.', 2000);
+        showWithDelay(ip4, 3000);
+
         statusSubscription.unsubscribe();
         resolve(ip);
       } else if (status.type === 'ERROR') {
@@ -143,8 +135,7 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
   try {
     await conn.connect();
     console.log('Connected to SoundcraftUI at:', discoveredIP);
-    console.log('About to call main iface')
-    ui24rInterface.mainInterface(conn);
+    ui24rInterface.mainInterface(conn,display);
    return true;
   } catch (error) {
     console.error(`Connection to ${discoveredIP} failed:`, error);
