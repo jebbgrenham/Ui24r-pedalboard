@@ -29,7 +29,6 @@ function mainInterface(conn) {
         mode = modes[modeIndex];
         console.log('Mode now', mode);
         updateSubscriptions();
-        console.log('set up buttons');
         setupButtons(mode);
     }
     // Watch for both rising and falling edges of the modeButton
@@ -37,7 +36,6 @@ function mainInterface(conn) {
         if (!err) {
             if (value === 0) {
                 // Button pressed, start the long press timeout
-                console.log('start timeout');
                 longPressTimeout = setTimeout(() => {
                     modeButtonThreshold = true;
                     console.log('mode threshold met');
@@ -46,7 +44,6 @@ function mainInterface(conn) {
             else if (value === 1) {
                 // Button released, clear the long press timeout
                 if (longPressTimeout) {
-                    console.log('clearing the timeout');
                     clearTimeout(longPressTimeout);
                     longPressTimeout = null;
                 }
@@ -68,14 +65,10 @@ function mainInterface(conn) {
             }
         }
     });
-    // Define LED and button pins
-    const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
     const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
-    function buildButtons() {
-        const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
-    }
     // LED and button arrays
-    const [LED1, LED2, LED3, LED4] = LED;
+    // Define LED and button pins
+    const [LED1, LED2, LED3, LED4] = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
     const [pushButton2, pushButton3, pushButton4] = pushButtons;
     const buttons = [pushButton2, pushButton3, pushButton4];
     const leds = [LED1, LED2, LED3, LED4];
@@ -86,7 +79,6 @@ function mainInterface(conn) {
     };
     // Create a map to track subscriptions
     const subscriptionMap = {};
-    let isButtonListenerPaused = false;
     function setupButtons(mode) {
         if (mode === "sampler") {
             buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 2)));
@@ -131,11 +123,7 @@ function mainInterface(conn) {
         else if (mode === "mutesA" || mode === "mutesB") {
             subscriptionMap[index] = conn.muteGroup(index).state$.subscribe((state) => {
                 LED.writeSync(state);
-                //console.log(`Read index: ${LEDindex} and set to:`, LED.readSync());
             });
-        }
-        else {
-            // Retain the original behavior for other modes
         }
     }
     function unsubscribeLEDs() {
@@ -151,28 +139,23 @@ function mainInterface(conn) {
     }
     function muter(buttonNumber) {
         const group = ledIndexMap[mode][buttonNumber - 1];
-        //  console.log(mode);
-        console.log("Group is:", group);
         if (typeof group === 'number' || typeof group === 'string') {
             conn.muteGroup(group).toggle();
         }
         console.log('Pushed Button:', group);
     }
     function handleMuteEvent(buttonNumber) {
-        if (!isButtonListenerPaused) {
-            return (err, value) => {
-                if (!err) {
-                    muter(buttonNumber);
-                }
-            };
-        }
+        return (err, value) => {
+            if (!err) {
+                muter(buttonNumber);
+            }
+        };
     }
     function sampler(buttonNumber) {
         // Turn on the LED
         let audio = null;
         leds[buttonNumber - 1].writeSync(LED_ON);
         if (audio) {
-            console.log('Vol to 0');
             (0, child_process_1.exec)('./alsamixer-fader/fade.sh 0 0.001');
             audio.kill(); // Stop audio playback if the button is pressed again
             leds[buttonNumber - 1].writeSync(LED_OFF);
@@ -194,14 +177,11 @@ function mainInterface(conn) {
         }
     }
     function handleSamplerEvent(buttonNumber) {
-        if (!isButtonListenerPaused) {
-            let audio = null;
-            return (err, value) => {
-                if (!err) {
-                    sampler(buttonNumber);
-                }
-            };
-        }
+        return (err, value) => {
+            if (!err) {
+                sampler(buttonNumber);
+            }
+        };
     }
     function player(buttonNumber) {
         switch (buttonNumber) {

@@ -43,7 +43,7 @@ export function mainInterface(conn: SoundcraftUI) {
         longPressTimeout = setTimeout(() => {
           modeButtonThreshold = true;
           console.log('mode threshold met');
-        }, 2000);
+        }, 1500);
       } else if (value === 1) {
         // Button released, clear the long press timeout
         if (longPressTimeout) {
