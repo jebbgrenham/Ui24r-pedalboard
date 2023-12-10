@@ -21,67 +21,48 @@ export function mainInterface(conn: SoundcraftUI) {
   let mode: string = "mutesA"; // You will regret changing this...
 
   let longPressTimeout: NodeJS.Timeout | null = null;
-
   console.log(mode);
 
   const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
-  let modeButtonReleased = false;
+  let modeButtonThreshold = false;
  
   function handleModeChange() {
-    stopButtonListeners();
+    //stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
     console.log('Mode now', mode);
     updateSubscriptions();
 
-    if (modeButtonReleased) {
-      console.log('mode has been released. Now wait 200 and set up buttons')
-      setTimeout(() => {
-        setupButtons(mode);
-      }, 200);
-      modeButtonReleased = false; // Reset the flag
-    }
+    console.log('set up buttons')
+    setupButtons(mode);
   } 
 
-  // Listen for a long press on button 4 (GPIO 5)
-  function handleModeChangeLongPress() {
-    console.log('CALLED handleModeChangeLongPress')
-    if (longPressTimeout) {
-      clearTimeout(longPressTimeout);
-      longPressTimeout = null;
-      console.log('Longpresstimeout cleared')
-      // Long press on button 1, handle mode change
-      handleModeChange();
-    }
-  } 
-
-  function watchModeButton() {
-    console.log('CALLED Watchmodebutton')
-    // Watch for both rising and falling edges of the modeButton
-    modeButton.watch((err: any, value: any) => {
-      if (!err) {
-        if (value === 0) {
-          // Button pressed, start the long press timeouti
-          console.log('mode pressed start timeout')
-          longPressTimeout = setTimeout(() => {
-            handleModeChangeLongPress();
-            console.log('CHANGING MODE LONG PRESS?');
-          }, 2000);
-        } else if (value === 1) {
-          console.log('modebutton released ')
-          // Button released, clear the long press timeout
-         if (longPressTimeout) {
-            console.log('clearing the timeout')
-            clearTimeout(longPressTimeout);
-            longPressTimeout = null;
-         } 
-        modeButtonReleased = true;
+  // Watch for both rising and falling edges of the modeButton
+  modeButton.watch((err: any, value: any) => {
+    if (!err) {
+      if (value === 0) {
+        // Button pressed, start the long press timeout
+        console.log('start timeout')
+        longPressTimeout = setTimeout(() => {
+          modeButtonThreshold = true;
+          console.log('mode threshold met. Stopping listeners');
+          stopButtonListeners(); 
+        }, 2000);
+      } else if (value === 1) {
+        // Button released, clear the long press timeout
+        if (longPressTimeout) {
+          console.log('clearing the timeout')
+          clearTimeout(longPressTimeout);
+          longPressTimeout = null;
+        } 
+        if (modeButtonThreshold === true) {
+          handleModeChange();
         }
+        modeButtonThreshold = false;
       }
-    });
-  }  
-  watchModeButton()
-
+    }
+  });
+    
   // Define LED and button pins
   const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
   const pushButtons = pushButtonPins.map((pin) => new Gpio(pin, 'in', 'rising', { debounceTimeout: DEBOUNCE_TIMEOUT }));
