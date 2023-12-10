@@ -17,9 +17,51 @@ export function mainInterface(conn: SoundcraftUI) {
 
   // Define modes
   const modes = ["mutesA", "mutesB", "player", "sampler"];
-  let modeIndex = 3; //so that on initial handleMode we get mutes A
-  let mode: string = "sampler"; // You will regret changing this...
-  console.log(mode);
+  let modeIndex = 0; //so that on initial handleMode we get mutes A
+  let mode: string = "mutesA"; // You will regret changing this...
+
+  let longPressTimeout: NodeJS.Timeout | null = null;
+
+console.log(mode);
+
+  const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+  // Listen for a long press on button 4 (GPIO 5)
+  function handleModeChangeLongPress() {
+    console.log('CALLED handleModeChangeLongPress')
+    if (longPressTimeout) {
+      clearTimeout(longPressTimeout);
+      longPressTimeout = null;
+      console.log('Longpresstimeout cleared')
+      // Long press on button 1, handle mode change
+      handleModeChange();
+    }
+  } 
+
+  function watchModeButton() {
+    console.log('CALLED Watchmodebutton')
+    // Watch for both rising and falling edges of the modeButton
+    modeButton.watch((err: any, value: any) => {
+      if (!err) {
+        if (value === 0) {
+          // Button pressed, start the long press timeouti
+          console.log('mode pressed start timeout')
+          longPressTimeout = setTimeout(() => {
+            handleModeChangeLongPress();
+            console.log('CHANGING MODE LONG PRESS?');
+          }, 2000);
+        } else if (value === 1) {
+          console.log('modebutton released ')
+          // Button released, clear the long press timeout
+         if (longPressTimeout) {
+            console.log('clearing the timeout')
+            clearTimeout(longPressTimeout);
+            longPressTimeout = null;
+         } 
+        }
+      }
+    });
+  }  
+  watchModeButton()
 
   // Define LED and button pins
   const LED = ledPinNumbers.map((pin) => new Gpio(pin, 'out'));
@@ -40,10 +82,22 @@ export function mainInterface(conn: SoundcraftUI) {
   // Create a map to track subscriptions
   const subscriptionMap: { [index: number | string]: Subscription } = {};
 
-  // Initial LED subscription and mode setup
-   let isButtonListenerPaused = false;
-   handleModeChange();
 
+  let isButtonListenerPaused = false;
+   
+  function setupButtons(mode: string) {
+    if (mode === "sampler") {
+          buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
+        } else if (mode === "player") {
+          buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
+        } else {
+          buttons.forEach((button, index) =>
+          button.watch(handleMuteEvent(index + 1)));
+        }
+  }
+  setupButtons(mode)
+
+  // Initial LED subscription and mode setup
   function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
     let index: number | string = LEDindex;
     if (subscriptionMap[index]) {
@@ -198,85 +252,52 @@ export function mainInterface(conn: SoundcraftUI) {
     console.log('Mode now', mode);
     updateSubscriptions();
 
-    if (mode === "sampler") {
-      buttons.forEach((button, index) => button.watch(handleSamplerEvent(index + 1)));
-    } else if (mode === "player") {
-      buttons.forEach((button, index) => button.watch(handlePlayerEvent(index + 1)));
-    } else {
-      buttons.forEach((button, index) =>
-      button.watch(handleMuteEvent(index + 1)));
-    }
+    modeButton.watch((err: any, value: any) => {
+      if (!err && value === 1) {
+        console.log('released mode')
+        setupButtons(mode)
+        modeButton.unwatch();
+        watchModeButton();
+      }
+    });
   }
 
 
-  let simultaneousPressTimeout: NodeJS.Timeout | null = null;
 
-  function handleSimultaneousPress() {
-    if (simultaneousPressTimeout) {
-      clearTimeout(simultaneousPressTimeout);
-      simultaneousPressTimeout = null;
-
-      // Both buttons 1 and 2 were pressed simultaneously
-      handleModeChange();
-    }
-  }
 
   // Initialize shutdown button 
-  const shutdownButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
+  const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
   let isShutdownButtonPressed = false;
   let shutdownTimeout: NodeJS.Timeout | null = null;
-
+  
   function handleShutdown() {
     console.log('Shutting down...');
     executeShutdownCommand();
   }
 
   shutdownButton.watch((err: any, value: any) => {
-      if (err) {
-        throw err;
-      }
+    if (err) {
+      throw err;
+    }
 
-      if (value === 0) {
-        isShutdownButtonPressed = true;
-        shutdownTimeout = setTimeout(() => {
-          if (isShutdownButtonPressed) {
-            handleShutdown();
-          }
-          shutdownTimeout = null;
-        }, 3000);
-
-        // Check for simultaneous press of buttons 1 and 2
-        simultaneousPressTimeout = setTimeout(() => {
-          handleSimultaneousPress();
-        }, 200);
-      } else if (value === 1) {
+    if (value === 0) {
+      isShutdownButtonPressed = true;
+      shutdownTimeout = setTimeout(() => {
         if (isShutdownButtonPressed) {
-          // handleModeChange();
+          handleShutdown();
         }
-        isShutdownButtonPressed = false;
+        shutdownTimeout = null;
+      }, 3000);
+    } else if (value === 1) {
+      isShutdownButtonPressed = false;
 
-        if (shutdownTimeout) {
-          clearTimeout(shutdownTimeout);
-          shutdownTimeout = null;
-        }
-
-        // Clear the simultaneous press timeout
-        if (simultaneousPressTimeout) {
-          clearTimeout(simultaneousPressTimeout);
-          simultaneousPressTimeout = null;
-        }
+      if (shutdownTimeout) {
+        clearTimeout(shutdownTimeout);
+        shutdownTimeout = null;
       }
+    }
   });
   
-  // Add a function to pause and resume button listeners
-  function pauseButtonListeners() {
-    isButtonListenerPaused = true;
-  }
-
-  function resumeButtonListeners() {
-    isButtonListenerPaused = false;
-  }
-
   function updateSubscriptions() {
     unsubscribeLEDs();
     const indexes = ledIndexMap[mode];
@@ -291,7 +312,7 @@ export function mainInterface(conn: SoundcraftUI) {
       subscribeLED(4, LED4);
     }
   }
-
+  updateSubscriptions();
   readline.emitKeypressEvents(process.stdin);
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
 
