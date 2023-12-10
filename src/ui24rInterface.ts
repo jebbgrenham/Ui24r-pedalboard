@@ -27,7 +27,6 @@ export function mainInterface(conn: SoundcraftUI) {
   let modeButtonThreshold = false;
  
   function handleModeChange() {
-    //stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
     mode = modes[modeIndex];
     console.log('Mode now', mode);
@@ -35,6 +34,7 @@ export function mainInterface(conn: SoundcraftUI) {
 
     console.log('set up buttons')
     setupButtons(mode);
+    isButtonListenerPaused = false;
   } 
 
   // Watch for both rising and falling edges of the modeButton
@@ -46,7 +46,8 @@ export function mainInterface(conn: SoundcraftUI) {
         longPressTimeout = setTimeout(() => {
           modeButtonThreshold = true;
           console.log('mode threshold met. Stopping listeners');
-          stopButtonListeners(); 
+          stopButtonListeners();
+          isButtonListenerPaused = true; 
         }, 2000);
       } else if (value === 1) {
         // Button released, clear the long press timeout
