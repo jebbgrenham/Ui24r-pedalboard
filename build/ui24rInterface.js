@@ -43,7 +43,8 @@ function mainInterface(conn, display) {
                 longPressTimeout = setTimeout(() => {
                     modeButtonThreshold = true;
                     console.log('mode threshold met');
-                }, 1500);
+                    display.writeString('MODE');
+                }, 1200);
             }
             else if (value === 1) {
                 // Button released, clear the long press timeout
@@ -147,6 +148,9 @@ function mainInterface(conn, display) {
             conn.muteGroup(group).toggle();
         }
         console.log('Pushed Button:', group);
+        let grp = String(group);
+        display.writeString('M.' + grp.toUpperCase());
+        setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
     }
     function handleMuteEvent(buttonNumber) {
         return (err, value) => {
@@ -167,6 +171,8 @@ function mainInterface(conn, display) {
         }
         else {
             console.log('trying to play');
+            display.writeString('SAM.' + buttonNumber + '.');
+            setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
             const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
             audio = (0, child_process_1.exec)(soundCommand, (err, stdout, stderr) => {
                 if (err) {
@@ -190,15 +196,23 @@ function mainInterface(conn, display) {
     function player(buttonNumber) {
         switch (buttonNumber) {
             case 1:
+                display.writeString('USB');
+                setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
                 handlePlayerButton1();
                 break;
             case 2:
+                display.writeString('BACK');
+                setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
                 conn.player.prev();
                 break;
             case 3:
+                display.writeString('NEXT');
+                setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
                 conn.player.next();
                 break;
             case 4:
+                display.writeString('REC*');
+                setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
                 conn.recorderMultiTrack.recordToggle();
                 break;
         }
@@ -210,29 +224,40 @@ function mainInterface(conn, display) {
             }
         };
     }
+    let playerLevel = 0;
     function handlePlayerButton1() {
         let destroy$ = new rxjs_1.Subject();
+        conn.master.player(1).faderLevel$.pipe((0, operators_1.take)(1)).subscribe(value => {
+            playerLevel = value;
+        });
         conn.player.state$
             .pipe((0, operators_1.takeUntil)(destroy$))
             .subscribe((state) => {
             if (state == soundcraft_ui_connection_1.PlayerState.Playing) {
-                console.log('stopping');
+                //console.log('stopping. 241', playerLevel);
                 destroy$.next(); // Signal unsubscription
                 destroy$.complete();
                 conn.master.player(1).fadeTo(0, 3000);
                 setTimeout(() => {
                     conn.player.pause();
+                    setTimeout(() => { conn.master.player(1).setFaderLevel(playerLevel); }, 750);
                 }, 3000);
             }
             else {
                 console.log('playing');
+                conn.player.loadPlaylist('Music');
+                conn.player.setShuffle(1);
+                conn.master.player(1).setFaderLevel(0);
                 conn.player.play();
-                conn.master.player(1).fadeToDB(-25, 3000);
+                setTimeout(() => { conn.master.player(1).fadeTo(playerLevel, 3000); }, 750);
                 destroy$.next(); // Signal unsubscription
                 destroy$.complete();
             }
         });
     }
+    conn.master.faderLevel$.subscribe(value => {
+        // ...
+    });
     function stopButtonListeners() {
         buttons.forEach((button) => button.unwatchAll());
     }
@@ -252,6 +277,7 @@ function mainInterface(conn, display) {
             isShutdownButtonPressed = true;
             shutdownTimeout = setTimeout(() => {
                 if (isShutdownButtonPressed) {
+                    display.writeString('BYE.{');
                     handleShutdown();
                 }
                 shutdownTimeout = null;

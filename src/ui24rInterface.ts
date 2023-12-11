@@ -1,7 +1,7 @@
 import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { PlayerState, MtkState } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { take, takeUntil } from 'rxjs/operators';
 import { exec, ExecException } from 'child_process';
 
 export function mainInterface(conn: SoundcraftUI,display) {
@@ -47,7 +47,8 @@ export function mainInterface(conn: SoundcraftUI,display) {
         longPressTimeout = setTimeout(() => {
           modeButtonThreshold = true;
           console.log('mode threshold met');
-        }, 1500);
+          display.writeString('MODE')
+        }, 1200);
       } else if (value === 1) {
         // Button released, clear the long press timeout
         if (longPressTimeout) {
@@ -147,6 +148,9 @@ export function mainInterface(conn: SoundcraftUI,display) {
       conn.muteGroup(group as any).toggle();
     }
     console.log('Pushed Button:', group);
+    let grp = String(group);
+    display.writeString('M.' + grp.toUpperCase());
+    setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
   }
 
   function handleMuteEvent(buttonNumber: number) {
@@ -168,6 +172,8 @@ export function mainInterface(conn: SoundcraftUI,display) {
       audio = null;
     } else {
       console.log('trying to play');
+      display.writeString('SAM.'+buttonNumber+'.');
+      setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
       const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
       audio = exec(soundCommand, (err, stdout, stderr) => {
         if (err) {
@@ -192,15 +198,23 @@ export function mainInterface(conn: SoundcraftUI,display) {
   function player(buttonNumber) {
       switch (buttonNumber) {
         case 1:
+          display.writeString('USB');
+          setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
           handlePlayerButton1();
           break;
         case 2:
+          display.writeString('BACK');
+          setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
           conn.player.prev();
           break;
         case 3:
+          display.writeString('NEXT');
+          setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
           conn.player.next();
           break;
         case 4:
+          display.writeString('REC*');
+          setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
           conn.recorderMultiTrack.recordToggle();
           break;
       }
@@ -213,31 +227,42 @@ export function mainInterface(conn: SoundcraftUI,display) {
       }
     };
   }
-  
+let playerLevel: number = 0;  
   function handlePlayerButton1() {
     let destroy$ = new Subject<void>();
+    conn.master.player(1).faderLevel$.pipe(
+      take(1)
+    ).subscribe(value => {
+      playerLevel = value;
+    });
 
-    conn.player.state$
+      conn.player.state$
       .pipe(takeUntil(destroy$))
       .subscribe((state: PlayerState) => {
         if (state == PlayerState.Playing) {
-          console.log('stopping');
+          //console.log('stopping. 241', playerLevel);
           destroy$.next(); // Signal unsubscription
           destroy$.complete();
           conn.master.player(1).fadeTo(0, 3000);
           setTimeout(() => {
             conn.player.pause();
+            setTimeout(() => { conn.master.player(1).setFaderLevel(playerLevel); }, 750);
           }, 3000);
         } else {
           console.log('playing');
+          conn.player.loadPlaylist('Music')	
+          conn.player.setShuffle(1)
+          conn.master.player(1).setFaderLevel(0);
           conn.player.play();
-          conn.master.player(1).fadeToDB(-25, 3000);
+          setTimeout(() => { conn.master.player(1).fadeTo(playerLevel, 3000); }, 750);
           destroy$.next(); // Signal unsubscription
           destroy$.complete();
         }
       });
   }
-
+conn.master.faderLevel$.subscribe(value => {
+  // ...
+});
   function stopButtonListeners() {
     buttons.forEach((button) => button.unwatchAll());
   }
@@ -261,6 +286,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
       isShutdownButtonPressed = true;
       shutdownTimeout = setTimeout(() => {
         if (isShutdownButtonPressed) {
+          display.writeString('BYE.{')
           handleShutdown();
         }
         shutdownTimeout = null;
