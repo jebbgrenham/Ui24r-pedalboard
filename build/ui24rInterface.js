@@ -255,9 +255,6 @@ function mainInterface(conn, display) {
             }
         });
     }
-    conn.master.faderLevel$.subscribe(value => {
-        // ...
-    });
     function stopButtonListeners() {
         buttons.forEach((button) => button.unwatchAll());
     }
@@ -278,6 +275,9 @@ function mainInterface(conn, display) {
             shutdownTimeout = setTimeout(() => {
                 if (isShutdownButtonPressed) {
                     display.writeString('BYE.{');
+                    var FourteenSegment = require('ht16k33-fourteensegment-display');
+                    display = new FourteenSegment(0x71, 1);
+                    unexportLEDs();
                     handleShutdown();
                 }
                 shutdownTimeout = null;
@@ -330,6 +330,7 @@ function mainInterface(conn, display) {
         });
     }
     process.on('SIGINT', () => {
+        display.writeString('BYE.{');
         unexportLEDs();
         unexportButtons();
         console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");

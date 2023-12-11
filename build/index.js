@@ -38,7 +38,7 @@ const ui24rInterface = __importStar(require("./ui24rInterface"));
 //Prove we booted
 var FourteenSegment = require('ht16k33-fourteensegment-display');
 var display = new FourteenSegment(0x70, 1);
-display.writeString("ACAB");
+display.writeString("A.C.A.B");
 const ping = require('ping');
 let conn;
 // Function to get the subnet based on the device's IP on wlan0

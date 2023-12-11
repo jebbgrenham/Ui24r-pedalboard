@@ -227,7 +227,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
       }
     };
   }
-let playerLevel: number = 0;  
+  let playerLevel: number = 0;  
   function handlePlayerButton1() {
     let destroy$ = new Subject<void>();
     conn.master.player(1).faderLevel$.pipe(
@@ -260,9 +260,7 @@ let playerLevel: number = 0;
         }
       });
   }
-conn.master.faderLevel$.subscribe(value => {
-  // ...
-});
+  
   function stopButtonListeners() {
     buttons.forEach((button) => button.unwatchAll());
   }
@@ -287,13 +285,15 @@ conn.master.faderLevel$.subscribe(value => {
       shutdownTimeout = setTimeout(() => {
         if (isShutdownButtonPressed) {
           display.writeString('BYE.{')
+          var FourteenSegment = require('ht16k33-fourteensegment-display');
+          display = new FourteenSegment(0x71, 1);
+          unexportLEDs(); 
           handleShutdown();
         }
         shutdownTimeout = null;
       }, 3000);
     } else if (value === 1) {
       isShutdownButtonPressed = false;
-
       if (shutdownTimeout) {
         clearTimeout(shutdownTimeout);
         shutdownTimeout = null;
@@ -342,6 +342,7 @@ conn.master.faderLevel$.subscribe(value => {
   }
 
   process.on('SIGINT', () => {
+    display.writeString('BYE.{')
     unexportLEDs();
     unexportButtons();
     console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
