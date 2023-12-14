@@ -30,12 +30,8 @@ function mainInterface(conn, display) {
     let modeButtonThreshold = false;
     function blinkLED(LED) {
         let isOn = false;
-        let isBlinking = true; // New flag to track blinking state
         // Toggle the LED state and schedule the next toggle
         function toggleLED() {
-            if (!isBlinking) {
-                return; // Exit if blinking is stopped
-            }
             if (isOn) {
                 LED.writeSync(LED_OFF);
                 setTimeout(toggleLED, BLINK_DURATION_OFF);
@@ -48,12 +44,6 @@ function mainInterface(conn, display) {
         }
         // Start the initial toggle
         toggleLED();
-        // Function to stop blinking
-        function stopBlinking() {
-            isBlinking = false;
-            LED.writeSync(LED_OFF); // Turn off the LED
-        }
-        return stopBlinking; // Return the function to stop blinking
     }
     function handleModeChange() {
         stopButtonListeners();
@@ -139,10 +129,8 @@ function mainInterface(conn, display) {
                         blinkLED(LED);
                     }
                     else {
-                        if (stopBlinking) {
-                            stopBlinking();
-                            stopBlinking = null;
-                        }
+                        console.log('I tried to turn it off...');
+                        LED.writeSync(LED_OFF);
                     }
                 });
             }
@@ -153,10 +141,7 @@ function mainInterface(conn, display) {
                         blinkLED(LED);
                     }
                     else {
-                        if (stopBlinking) {
-                            stopBlinking();
-                            stopBlinking = null;
-                        }
+                        LED.writeSync(LED_OFF);
                     }
                 });
             }

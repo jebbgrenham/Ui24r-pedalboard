@@ -13,7 +13,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
   const readline = require('readline');
   const LED_OFF = 0;
   const LED_ON = 1;
-  const DEBOUNCE_TIMEOUT = 75;
+  const DEBOUNCE_TIMEOUT = 125;
   const ledPinNumbers = [9, 10, 11, 12];
   const pushButtonPins = [6, 7, 8];
   const BLINK_DURATION_ON = 300;
@@ -31,38 +31,20 @@ export function mainInterface(conn: SoundcraftUI,display) {
   const modeButton = new Gpio(5, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
   let modeButtonThreshold = false;
 
-   function blinkLED(LED: { writeSync: (state: number) => void }) {
+  function blinkLED(LED) {
     let isOn = false;
-    let isBlinking = true; // New flag to track blinking state
-
-    // Toggle the LED state and schedule the next toggle
-    function toggleLED() {
-      if (!isBlinking) {
-        return; // Exit if blinking is stopped
-      }
-
-      if (isOn) {
-        LED.writeSync(LED_OFF);
-        setTimeout(toggleLED, BLINK_DURATION_OFF);
-      } else {
-        LED.writeSync(LED_ON);
-        setTimeout(toggleLED, BLINK_DURATION_ON);
-      }
+    const iv = setInterval(() => {
       isOn = !isOn;
-    }
+      LED.writeSync(isOn ? 1 : 0); // Synchronous write
+    }, 300); // Adjust the interval as needed
 
-    // Start the initial toggle
-    toggleLED();
-
-    // Function to stop blinking
-    function stopBlinking() {
-      isBlinking = false;
-      LED.writeSync(LED_OFF); // Turn off the LED
-    }
-
-    return stopBlinking; // Return the function to stop blinking
+    // Return a function to stop blinking
+    return () => {
+      clearInterval(iv);
+      LED.writeSync(0); // Ensure the LED is off when not blinking
+    };
   }
-  
+
   function handleModeChange() {
     stopButtonListeners();
     modeIndex = (modeIndex + 1) % modes.length;
@@ -131,36 +113,47 @@ export function mainInterface(conn: SoundcraftUI,display) {
   }
   setupButtons(mode)
 
-  // Initial LED subscription and mode setup
-  function subscribeLED(LEDindex: number | string, LED: { writeSync: (state: number) => void, readSync: () => number }) {
+  // Modify the subscribeLED function to use blinkLED
+  function subscribeLED(LEDindex, LED) {
     let index: number | string = LEDindex;
-    let stopBlinking: Function | null = null;
+    let stopBlinking: (() => void) | null = null;
 
     if (subscriptionMap[index]) {
       subscriptionMap[index].unsubscribe(); // Unsubscribe previous subscription
     }
+
     if (mode === "player") {
       if (index === 1) {
         subscriptionMap[index] = conn.player.state$.subscribe((state: PlayerState) => {
-          if (state === PlayerState.Playing) {
-            blinkLED(LED);
-          } else {
-            if (stopBlinking) {
-              stopBlinking();
-              stopBlinking = null;
-            }
+          if (state === PlayerState.Playing && !stopBlinking) {
+            // Start blinking and store the stopBlinking function
+            stopBlinking = blinkLED(LED);
+          } else if (state !== PlayerState.Playing && stopBlinking) {
+            // Stop blinking and revert to the subscription
+            stopBlinking();
+            stopBlinking = null;
+          }
+
+          // Update the LED state based on the player state
+          if (state !== PlayerState.Playing) {
+            LED.writeSync(0);
           }
         });
       } else if (index === 4) {
         // Led4 is based on recorder state
         subscriptionMap[index] = conn.recorderMultiTrack.recording$.subscribe((recording: number) => {
-          if (recording == 1) {
-            blinkLED(LED);
-          } else {
-            if (stopBlinking) {
-              stopBlinking();
-              stopBlinking = null;
-            }
+          if (recording == 1 && !stopBlinking) {
+            // Start blinking and store the stopBlinking function
+            stopBlinking = blinkLED(LED);
+          } else if (recording !== 1 && stopBlinking) {
+            // Stop blinking and revert to the subscription
+            stopBlinking();
+            stopBlinking = null;
+          }
+
+          // Update the LED state based on the recorder state
+          if (recording !== 1) {
+            LED.writeSync(0);
           }
         });
       }
@@ -168,8 +161,9 @@ export function mainInterface(conn: SoundcraftUI,display) {
       subscriptionMap[index] = conn.muteGroup(index as any).state$.subscribe((state) => {
         LED.writeSync(state);
       });
-    } 
+    }
   }
+
 
   function unsubscribeLEDs() {
     for (const led of leds) {
@@ -206,7 +200,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
   function sampler(buttonNumber) {
     // Turn on the LED
     let audio: any = null;
-    blinkLED(leds[buttonNumber - 1]);
+//    blinkLED(leds[buttonNumber - 1]);
     if (audio) {
       exec('./alsamixer-fader/fade.sh 0 0.001');
       audio.kill(); // Stop audio playback if the button is pressed again
@@ -269,6 +263,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
       }
     };
   }
+
   let playerLevel: number = 0;  
   function handlePlayerButton1() {
     let destroy$ = new Subject<void>();
