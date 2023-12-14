@@ -200,7 +200,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
   function sampler(buttonNumber) {
     // Turn on the LED
     let audio: any = null;
-//    blinkLED(leds[buttonNumber - 1]);
+    blinkLED(leds[buttonNumber - 1]);
     if (audio) {
       exec('./alsamixer-fader/fade.sh 0 0.001');
       audio.kill(); // Stop audio playback if the button is pressed again
@@ -210,7 +210,9 @@ export function mainInterface(conn: SoundcraftUI,display) {
       console.log('trying to play');
       display.writeString('SAM.'+buttonNumber+'.');
       setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
-      const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+//      const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+//NONE OF THIS WILL WORK UNTIL THE PCM BOARD IS CONNECTED
+      const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
       audio = exec(soundCommand, (err, stdout, stderr) => {
         if (err) {
           console.log(`Could not play sound/sound stopped: ${err}`);
