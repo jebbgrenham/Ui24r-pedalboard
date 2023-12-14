@@ -13,7 +13,7 @@ function mainInterface(conn, display) {
     const readline = require('readline');
     const LED_OFF = 0;
     const LED_ON = 1;
-    const DEBOUNCE_TIMEOUT = 75;
+    const DEBOUNCE_TIMEOUT = 125;
     const ledPinNumbers = [9, 10, 11, 12];
     const pushButtonPins = [6, 7, 8];
     const BLINK_DURATION_ON = 300;
@@ -30,20 +30,15 @@ function mainInterface(conn, display) {
     let modeButtonThreshold = false;
     function blinkLED(LED) {
         let isOn = false;
-        // Toggle the LED state and schedule the next toggle
-        function toggleLED() {
-            if (isOn) {
-                LED.writeSync(LED_OFF);
-                setTimeout(toggleLED, BLINK_DURATION_OFF);
-            }
-            else {
-                LED.writeSync(LED_ON);
-                setTimeout(toggleLED, BLINK_DURATION_ON);
-            }
+        const iv = setInterval(() => {
             isOn = !isOn;
-        }
-        // Start the initial toggle
-        toggleLED();
+            LED.writeSync(isOn ? 1 : 0); // Synchronous write
+        }, 300); // Adjust the interval as needed
+        // Return a function to stop blinking
+        return () => {
+            clearInterval(iv);
+            LED.writeSync(0); // Ensure the LED is off when not blinking
+        };
     }
     function handleModeChange() {
         stopButtonListeners();
@@ -115,7 +110,7 @@ function mainInterface(conn, display) {
         }
     }
     setupButtons(mode);
-    // Initial LED subscription and mode setup
+    // Modify the subscribeLED function to use blinkLED
     function subscribeLED(LEDindex, LED) {
         let index = LEDindex;
         let stopBlinking = null;
@@ -125,23 +120,36 @@ function mainInterface(conn, display) {
         if (mode === "player") {
             if (index === 1) {
                 subscriptionMap[index] = conn.player.state$.subscribe((state) => {
-                    if (state === soundcraft_ui_connection_1.PlayerState.Playing) {
-                        blinkLED(LED);
+                    if (state === soundcraft_ui_connection_1.PlayerState.Playing && !stopBlinking) {
+                        // Start blinking and store the stopBlinking function
+                        stopBlinking = blinkLED(LED);
                     }
-                    else {
-                        console.log('I tried to turn it off...');
-                        LED.writeSync(LED_OFF);
+                    else if (state !== soundcraft_ui_connection_1.PlayerState.Playing && stopBlinking) {
+                        // Stop blinking and revert to the subscription
+                        stopBlinking();
+                        stopBlinking = null;
+                    }
+                    // Update the LED state based on the player state
+                    if (state !== soundcraft_ui_connection_1.PlayerState.Playing) {
+                        LED.writeSync(0);
                     }
                 });
             }
             else if (index === 4) {
                 // Led4 is based on recorder state
                 subscriptionMap[index] = conn.recorderMultiTrack.recording$.subscribe((recording) => {
-                    if (recording == 1) {
-                        blinkLED(LED);
+                    if (recording == 1 && !stopBlinking) {
+                        // Start blinking and store the stopBlinking function
+                        stopBlinking = blinkLED(LED);
                     }
-                    else {
-                        LED.writeSync(LED_OFF);
+                    else if (recording !== 1 && stopBlinking) {
+                        // Stop blinking and revert to the subscription
+                        stopBlinking();
+                        stopBlinking = null;
+                    }
+                    // Update the LED state based on the recorder state
+                    if (recording !== 1) {
+                        LED.writeSync(0);
                     }
                 });
             }
@@ -194,7 +202,9 @@ function mainInterface(conn, display) {
             console.log('trying to play');
             display.writeString('SAM.' + buttonNumber + '.');
             setTimeout(() => display.writeString(modesDisp[modeIndex]), 1000);
-            const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+            //      const soundCommand = `amixer -q -M set "Soundcraft Ui24 " 100%; pw-play /home/admin/samples/${buttonNumber}.wav`;
+            //NONE OF THIS WILL WORK UNTIL THE PCM BOARD IS CONNECTED
+            const soundCommand = `pw-play /home/admin/samples/${buttonNumber}.wav`;
             audio = (0, child_process_1.exec)(soundCommand, (err, stdout, stderr) => {
                 if (err) {
                     console.log(`Could not play sound/sound stopped: ${err}`);
