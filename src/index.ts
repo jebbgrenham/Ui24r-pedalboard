@@ -2,6 +2,8 @@ import { SoundcraftUI } from 'soundcraft-ui-connection';
 import { interval, Subscription, Subject } from 'rxjs';
 import * as os from 'os';
 import * as ui24rInterface from './ui24rInterface';
+import { exec, ExecException } from 'child_process';
+const Gpio = require('onoff').Gpio;
 
 //Prove we booted
 var FourteenSegment = require('ht16k33-fourteensegment-display');
@@ -143,15 +145,58 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
   }
 }
 
-function unexportDisplay() {
-  console.log('Closing down');
+
+
+
+// Initialize shutdown button 
+const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: 75 });
+let isShutdownButtonPressed = false;
+let shutdownTimeout: NodeJS.Timeout | null = null;
+
+function handleShutdown() {
+  console.log('Shutting down...');
+  executeShutdownCommand();
 }
 
+shutdownButton.watch((err: any, value: any) => {
+  if (err) {
+    throw err;
+  }
+
+  if (value === 0) {
+    isShutdownButtonPressed = true;
+    shutdownTimeout = setTimeout(() => {
+      if (isShutdownButtonPressed) {
+        display.writeString('BYE.{')
+//        var FourteenSegment = require('ht16k33-fourteensegment-display');
+//        display = new FourteenSegment(0x71, 1);
+        handleShutdown();
+      }
+      shutdownTimeout = null;
+    }, 3000);
+  } else if (value === 1) {
+    isShutdownButtonPressed = false;
+    if (shutdownTimeout) {
+      clearTimeout(shutdownTimeout);
+      shutdownTimeout = null;
+    }
+  }
+});
+
+function executeShutdownCommand() {
+  exec('sudo shutdown -h now', (error: Error | null, stdout: string, stderr: string) => {
+    if (error) {
+      console.error(`Error during shutdown: ${error}`);
+    } else {
+      console.log('Shutdown initiated successfully.');
+    }
+  });
+}
 
 initializeSoundcraftUIConnection();
 
 process.on('SIGINT', () => {
-  unexportDisplay();
+  display.writeString('BYE.{')
   console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
   process.exit(0);
 });

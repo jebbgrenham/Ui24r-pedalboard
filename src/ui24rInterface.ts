@@ -304,42 +304,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
     buttons.forEach((button) => button.unwatchAll());
   }
 
-  // Initialize shutdown button 
-  const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
-  let isShutdownButtonPressed = false;
-  let shutdownTimeout: NodeJS.Timeout | null = null;
-  
-  function handleShutdown() {
-    console.log('Shutting down...');
-    executeShutdownCommand();
-  }
 
-  shutdownButton.watch((err: any, value: any) => {
-    if (err) {
-      throw err;
-    }
-
-    if (value === 0) {
-      isShutdownButtonPressed = true;
-      shutdownTimeout = setTimeout(() => {
-        if (isShutdownButtonPressed) {
-          display.writeString('BYE.{')
-          var FourteenSegment = require('ht16k33-fourteensegment-display');
-          display = new FourteenSegment(0x71, 1);
-          unexportLEDs(); 
-          handleShutdown();
-        }
-        shutdownTimeout = null;
-      }, 3000);
-    } else if (value === 1) {
-      isShutdownButtonPressed = false;
-      if (shutdownTimeout) {
-        clearTimeout(shutdownTimeout);
-        shutdownTimeout = null;
-      }
-    }
-  });
-  
   function updateSubscriptions() {
     unsubscribeLEDs();
     const indexes = ledIndexMap[mode];
@@ -367,16 +332,6 @@ export function mainInterface(conn: SoundcraftUI,display) {
   function unexportButtons() {
     pushButtons.forEach((button) => {
       button.unexport();
-    });
-  }
-
-  function executeShutdownCommand() {
-    exec('sudo shutdown -h now', (error: Error | null, stdout: string, stderr: string) => {
-      if (error) {
-        console.error(`Error during shutdown: ${error}`);
-      } else {
-        console.log('Shutdown initiated successfully.');
-      }
     });
   }
 
