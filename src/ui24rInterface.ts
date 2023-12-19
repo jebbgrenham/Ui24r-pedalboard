@@ -202,7 +202,7 @@ export function mainInterface(conn: SoundcraftUI,display) {
     let audio: any = null;
     blinkLED(leds[buttonNumber - 1]);
     if (audio) {
-      exec('./alsamixer-fader/fade.sh 0 0.001');
+      exec('./fade.sh 0 0.001');
       audio.kill(); // Stop audio playback if the button is pressed again
       leds[buttonNumber - 1].writeSync(LED_OFF);
       audio = null;
