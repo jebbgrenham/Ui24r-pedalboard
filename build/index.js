@@ -35,6 +35,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const soundcraft_ui_connection_1 = require("soundcraft-ui-connection");
 const os = __importStar(require("os"));
 const ui24rInterface = __importStar(require("./ui24rInterface"));
+const child_process_1 = require("child_process");
+const Gpio = require('onoff').Gpio;
 //Prove we booted
 var FourteenSegment = require('ht16k33-fourteensegment-display');
 var display = new FourteenSegment(0x70, 1);
@@ -162,12 +164,51 @@ function initializeSoundcraftUIConnection() {
         }
     });
 }
-function unexportDisplay() {
-    console.log('Closing down');
+// Initialize shutdown button 
+const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: 75 });
+let isShutdownButtonPressed = false;
+let shutdownTimeout = null;
+function handleShutdown() {
+    console.log('Shutting down...');
+    executeShutdownCommand();
+}
+shutdownButton.watch((err, value) => {
+    if (err) {
+        throw err;
+    }
+    if (value === 0) {
+        isShutdownButtonPressed = true;
+        shutdownTimeout = setTimeout(() => {
+            if (isShutdownButtonPressed) {
+                display.writeString('BYE.{');
+                //        var FourteenSegment = require('ht16k33-fourteensegment-display');
+                //        display = new FourteenSegment(0x71, 1);
+                handleShutdown();
+            }
+            shutdownTimeout = null;
+        }, 3000);
+    }
+    else if (value === 1) {
+        isShutdownButtonPressed = false;
+        if (shutdownTimeout) {
+            clearTimeout(shutdownTimeout);
+            shutdownTimeout = null;
+        }
+    }
+});
+function executeShutdownCommand() {
+    (0, child_process_1.exec)('sudo shutdown -h now', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error during shutdown: ${error}`);
+        }
+        else {
+            console.log('Shutdown initiated successfully.');
+        }
+    });
 }
 initializeSoundcraftUIConnection();
 process.on('SIGINT', () => {
-    unexportDisplay();
+    display.writeString('BYE.{');
     console.log("\nGracefully shutting down from SIGINT (Ctrl-C)");
     process.exit(0);
 });

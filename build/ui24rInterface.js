@@ -193,7 +193,7 @@ function mainInterface(conn, display) {
         let audio = null;
         blinkLED(leds[buttonNumber - 1]);
         if (audio) {
-            (0, child_process_1.exec)('./alsamixer-fader/fade.sh 0 0.001');
+            (0, child_process_1.exec)('./fade.sh 0 0.001');
             audio.kill(); // Stop audio playback if the button is pressed again
             leds[buttonNumber - 1].writeSync(LED_OFF);
             audio = null;
@@ -289,39 +289,6 @@ function mainInterface(conn, display) {
     function stopButtonListeners() {
         buttons.forEach((button) => button.unwatchAll());
     }
-    // Initialize shutdown button 
-    const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: DEBOUNCE_TIMEOUT });
-    let isShutdownButtonPressed = false;
-    let shutdownTimeout = null;
-    function handleShutdown() {
-        console.log('Shutting down...');
-        executeShutdownCommand();
-    }
-    shutdownButton.watch((err, value) => {
-        if (err) {
-            throw err;
-        }
-        if (value === 0) {
-            isShutdownButtonPressed = true;
-            shutdownTimeout = setTimeout(() => {
-                if (isShutdownButtonPressed) {
-                    display.writeString('BYE.{');
-                    var FourteenSegment = require('ht16k33-fourteensegment-display');
-                    display = new FourteenSegment(0x71, 1);
-                    unexportLEDs();
-                    handleShutdown();
-                }
-                shutdownTimeout = null;
-            }, 3000);
-        }
-        else if (value === 1) {
-            isShutdownButtonPressed = false;
-            if (shutdownTimeout) {
-                clearTimeout(shutdownTimeout);
-                shutdownTimeout = null;
-            }
-        }
-    });
     function updateSubscriptions() {
         unsubscribeLEDs();
         const indexes = ledIndexMap[mode];
@@ -348,16 +315,6 @@ function mainInterface(conn, display) {
     function unexportButtons() {
         pushButtons.forEach((button) => {
             button.unexport();
-        });
-    }
-    function executeShutdownCommand() {
-        (0, child_process_1.exec)('sudo shutdown -h now', (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error during shutdown: ${error}`);
-            }
-            else {
-                console.log('Shutdown initiated successfully.');
-            }
         });
     }
     process.on('SIGINT', () => {
