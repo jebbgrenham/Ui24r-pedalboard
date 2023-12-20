@@ -10,10 +10,22 @@ var FourteenSegment = require('ht16k33-fourteensegment-display');
 var display = new FourteenSegment(0x70, 1);
 display.writeString("A.C.A.B");
 
-
 const ping = require('ping');
-
 let conn: SoundcraftUI;
+
+function scrollDisplay(inputString: string, inputShort: string): void {
+  const blockLength = 4;
+  inputString = "    " + inputString + "   " + inputShort;
+
+  for (let i = 0; i < inputString.length - blockLength + 1; i++) {
+    const block = inputString.substring(i, i + blockLength);
+
+    // Use setTimeout to wait 200ms between iterations
+    setTimeout(() => {
+      display.writeString(block);
+    }, i * 200);
+  }
+}
 
 // Function to get the subnet based on the device's IP on wlan0
 function getSubnet(): string | null {
@@ -22,7 +34,6 @@ function getSubnet(): string | null {
 
   if (wlan0Interface) {
     const ipAddress = wlan0Interface.find((info) => info.family === 'IPv4')?.address;
-
     if (ipAddress) {
       // Assuming the subnet is in the format 'xxx.xxx.xxx'
       const subnet = ipAddress.split('.').slice(0, 3).join('.');
@@ -39,13 +50,12 @@ async function discoverSoundcraftUI(): Promise<string | null> {
   if (subnet) {
     for (let attempt = 0; attempt < 5; attempt++) {
       const pingPromises: Promise<[string, boolean] | null>[] = [];
-
       for (let i = 1; i <= 255; i++) {
         const ip = `${subnet}.${i}`;
         pingPromises.push(pingAndCheck(ip));
       }
      const results = await Promise.all(pingPromises);
-
+      display.writeString('SRCH');
       for (const result of results) {
         if (result && result[1]) {
           const connectedIP = await attemptConnection(result[0]);
@@ -56,7 +66,6 @@ async function discoverSoundcraftUI(): Promise<string | null> {
       }
     }
   }
-
   return null; // No reachable device found after 5 attempts
 }
 
@@ -69,9 +78,6 @@ async function pingAndCheck(ip: string): Promise<[string, boolean] | null> {
   }
 }
 
-// ...
-
-
 async function attemptConnection(ip: string): Promise<string | null> {
   return new Promise((resolve) => {
     conn = new SoundcraftUI(ip);
@@ -83,20 +89,7 @@ async function attemptConnection(ip: string): Promise<string | null> {
       if (status.type === 'OPEN') {
         // Connection successful, complete the Promise
         console.log('Ah excellent! Here is a mixer I can talk to')
-        
-        //show IP to user
-        const [ip1, ip2, ip3, ip4] = ip.split('.');
-        const showWithDelay = (ip, delay) => {
-          setTimeout(() => {
-            display.writeString(ip);
-          }, delay);
-        };
-        // Show each digit
-        showWithDelay(ip1 + '.', 0);
-        showWithDelay(ip2 + '.', 1000);
-        showWithDelay(ip3 + '.', 2000);
-        showWithDelay(ip4, 3000);
-
+        scrollDisplay('SUCCESS @ '+ip,'SUCC.');
         statusSubscription.unsubscribe();
         resolve(ip);
       } else if (status.type === 'ERROR') {
@@ -106,7 +99,6 @@ async function attemptConnection(ip: string): Promise<string | null> {
         resolve(null);
       }
     });
-
     try {
       // Connect and wait for the operation to finish
       conn.connect().then(() => {
@@ -122,18 +114,14 @@ async function attemptConnection(ip: string): Promise<string | null> {
   });
 }
 
-// ...
-
 async function initializeSoundcraftUIConnection(): Promise<boolean> {
   const discoveredIP = await discoverSoundcraftUI();
-
   if (!discoveredIP) {
     console.error('No SoundcraftUI device found on the network.');
+    scrollDisplay('NO MIXER ON NETWORK','NoMX');
     return false;
   }
-
   conn = new SoundcraftUI(discoveredIP);
-
   try {
     await conn.connect();
     console.log('Connected to SoundcraftUI at:', discoveredIP);
@@ -144,9 +132,6 @@ async function initializeSoundcraftUIConnection(): Promise<boolean> {
     return false;
   }
 }
-
-
-
 
 // Initialize shutdown button 
 const shutdownButton = new Gpio(8, 'in', 'both', { debounceTimeout: 75 });
@@ -162,14 +147,11 @@ shutdownButton.watch((err: any, value: any) => {
   if (err) {
     throw err;
   }
-
   if (value === 0) {
     isShutdownButtonPressed = true;
     shutdownTimeout = setTimeout(() => {
       if (isShutdownButtonPressed) {
         display.writeString('BYE.{')
-//        var FourteenSegment = require('ht16k33-fourteensegment-display');
-//        display = new FourteenSegment(0x71, 1);
         handleShutdown();
       }
       shutdownTimeout = null;
