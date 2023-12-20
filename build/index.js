@@ -43,6 +43,17 @@ var display = new FourteenSegment(0x70, 1);
 display.writeString("A.C.A.B");
 const ping = require('ping');
 let conn;
+function scrollDisplay(inputString, inputShort) {
+    const blockLength = 4;
+    inputString = "    " + inputString + "   " + inputShort;
+    for (let i = 0; i < inputString.length - blockLength + 1; i++) {
+        const block = inputString.substring(i, i + blockLength);
+        // Use setTimeout to wait 200ms between iterations
+        setTimeout(() => {
+            display.writeString(block);
+        }, i * 200);
+    }
+}
 // Function to get the subnet based on the device's IP on wlan0
 function getSubnet() {
     var _a;
@@ -70,6 +81,7 @@ function discoverSoundcraftUI() {
                     pingPromises.push(pingAndCheck(ip));
                 }
                 const results = yield Promise.all(pingPromises);
+                display.writeString('SRCH');
                 for (const result of results) {
                     if (result && result[1]) {
                         const connectedIP = yield attemptConnection(result[0]);
@@ -94,7 +106,6 @@ function pingAndCheck(ip) {
         }
     });
 }
-// ...
 function attemptConnection(ip) {
     return __awaiter(this, void 0, void 0, function* () {
         return new Promise((resolve) => {
@@ -105,18 +116,7 @@ function attemptConnection(ip) {
                 if (status.type === 'OPEN') {
                     // Connection successful, complete the Promise
                     console.log('Ah excellent! Here is a mixer I can talk to');
-                    //show IP to user
-                    const [ip1, ip2, ip3, ip4] = ip.split('.');
-                    const showWithDelay = (ip, delay) => {
-                        setTimeout(() => {
-                            display.writeString(ip);
-                        }, delay);
-                    };
-                    // Show each digit
-                    showWithDelay(ip1 + '.', 0);
-                    showWithDelay(ip2 + '.', 1000);
-                    showWithDelay(ip3 + '.', 2000);
-                    showWithDelay(ip4, 3000);
+                    scrollDisplay('SUCCESS @ ' + ip, 'SUCC.');
                     statusSubscription.unsubscribe();
                     resolve(ip);
                 }
@@ -143,12 +143,12 @@ function attemptConnection(ip) {
         });
     });
 }
-// ...
 function initializeSoundcraftUIConnection() {
     return __awaiter(this, void 0, void 0, function* () {
         const discoveredIP = yield discoverSoundcraftUI();
         if (!discoveredIP) {
             console.error('No SoundcraftUI device found on the network.');
+            scrollDisplay('NO MIXER ON NETWORK', 'NoMX');
             return false;
         }
         conn = new soundcraft_ui_connection_1.SoundcraftUI(discoveredIP);
@@ -181,8 +181,6 @@ shutdownButton.watch((err, value) => {
         shutdownTimeout = setTimeout(() => {
             if (isShutdownButtonPressed) {
                 display.writeString('BYE.{');
-                //        var FourteenSegment = require('ht16k33-fourteensegment-display');
-                //        display = new FourteenSegment(0x71, 1);
                 handleShutdown();
             }
             shutdownTimeout = null;
